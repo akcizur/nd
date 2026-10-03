@@ -47,7 +47,7 @@ export class SettingsMenu {
         <section class="settings-section settings-section--bindings">
           <div class="settings-section__title">KEYBOARD / MOUSE</div>
           <div class="binding-list" data-binding-list></div>
-          <p class="remap-status" data-remap-status>Tap a binding, then press a key.</p>
+          <p class="remap-status" data-remap-status>Tap a binding, then press a key or mouse button.</p>
         </section>
 
         <div class="settings-actions">
@@ -87,8 +87,10 @@ export class SettingsMenu {
 
     this._buildBindings();
     this._syncFromInput();
-    this.remapListener = event => this._captureKey(event);
-    addEventListener('keydown', this.remapListener);
+    this.remapKeyListener = event => this._captureKey(event);
+    this.remapMouseListener = event => this._captureMouse(event);
+    addEventListener('keydown', this.remapKeyListener);
+    addEventListener('mousedown', this.remapMouseListener);
   }
 
   _buildBindings() {
@@ -100,6 +102,12 @@ export class SettingsMenu {
       </div>`).join('');
     for (const button of list.querySelectorAll('[data-remap]')) {
       button.onclick = () => this.beginRemap(button.dataset.remap);
+      button.ondblclick = event => {
+        event.preventDefault();
+        this.input?.clearBinding(button.dataset.remap);
+        this._syncFromInput();
+        this.status.textContent = button.dataset.remap.toUpperCase() + ': UNBOUND';
+      };
     }
   }
 
@@ -157,7 +165,18 @@ export class SettingsMenu {
     if (!this.waitingFor || event.code === 'Escape') return;
     event.preventDefault();
     this.input.remap(this.waitingFor, [event.code]);
-    this.status.textContent = `${this.waitingFor.toUpperCase()}: ${displayCode(event.code)}`;
+    this.status.textContent = this.waitingFor.toUpperCase() + ': ' + displayCode(event.code);
+    this.waitingFor = null;
+    this._syncFromInput();
+  }
+
+  _captureMouse(event) {
+    if (!this.waitingFor) return;
+    const code = 'Mouse' + (event.button + 1);
+    if (event.button === 0 && event.target?.closest?.('[data-remap]')) return;
+    event.preventDefault();
+    this.input.remap(this.waitingFor, [code]);
+    this.status.textContent = this.waitingFor.toUpperCase() + ': ' + displayCode(code);
     this.waitingFor = null;
     this._syncFromInput();
   }
