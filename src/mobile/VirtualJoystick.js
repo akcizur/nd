@@ -24,6 +24,11 @@ export class VirtualJoystick {
     zone.addEventListener('pointercancel', event => this.end(event));
   }
 
+  setRadius(radius) {
+    this.radius = radius;
+    this.el.style.setProperty('--joystick-radius', `${radius}px`);
+  }
+
   start(event) {
     if (this.activePointer !== null) return;
     event.preventDefault();
