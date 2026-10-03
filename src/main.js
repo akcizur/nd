@@ -208,7 +208,22 @@ const gameMenu = new GameMenu({
   onSettings: () => openSettings(GameState.PAUSED),
   onMainMenu: () => returnToMainMenu(),
 });
-const settingsMenu = new SettingsMenu({ onBack: () => closeSettings(), inputRouter: input });
+const cameraSettings = { sensitivity: 1, invertX: false, invertY: false };
+const applyCameraSettings = () => {
+  if (!cameraSystem) return;
+  cameraSystem.sensitivityX = 1.8 * cameraSettings.sensitivity;
+  cameraSystem.sensitivityY = 1.6 * cameraSettings.sensitivity;
+  cameraSystem.invertX = cameraSettings.invertX;
+  cameraSystem.invertY = cameraSettings.invertY;
+};
+const settingsMenu = new SettingsMenu({
+  onBack: () => closeSettings(),
+  inputRouter: input,
+  onCameraSettings: settings => {
+    Object.assign(cameraSettings, settings);
+    applyCameraSettings();
+  },
+});
 
 const aboutMenu = document.createElement('section');
 aboutMenu.className = 'menu-screen about-menu';
@@ -279,6 +294,7 @@ function restartGame() {
   if (!player) return;
   cameraSystem && (cameraSystem.yaw = 0, cameraSystem.pitch = .28);
   vehicleController && (vehicleController.speed = 0);
+  physicsWorld?.setCharacterEnabled(playerPhysics, true);
   physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
   playerController && (playerController.velocityY = 0, playerController.grounded = true);
   physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
@@ -441,6 +457,7 @@ async function start() {
   }
   await loadCharacters();
   cameraSystem = new CameraSystem(camera);
+  applyCameraSettings();
   playerController = new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
   vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   playerPhysics = physicsWorld.createCharacter(player);
