@@ -11,7 +11,7 @@ export class PhysicsWorld {
     this.staticBodies = [];
     this.fixedDt = 1 / 60;
     this.accumulator = 0;
-    this.maxSubsteps = 4;
+    this.maxSubsteps = 8;
     this.characterController = world.createCharacterController(0.02);
     this.characterController.setUp({ x: 0, y: 1, z: 0 });
     this.characterController.setMaxSlopeClimbAngle(Math.PI * 0.43);
@@ -145,6 +145,7 @@ export class PhysicsWorld {
       this.accumulator -= this.fixedDt;
       steps += 1;
     }
+    if (this.accumulator >= this.fixedDt) this.accumulator = 0;
     return steps;
   }
 }
