@@ -33,6 +33,7 @@ export class VirtualJoystick {
     if (this.activePointer !== null) return;
     event.preventDefault();
     this.activePointer = event.pointerId;
+    this.zone.setPointerCapture?.(event.pointerId);
     this.center.set(event.clientX, event.clientY);
     this.el.style.left = event.clientX + 'px';
     this.el.style.top = event.clientY + 'px';
