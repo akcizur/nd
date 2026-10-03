@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export class AnimationSystem {
   constructor(object) {
     this.object = object;
@@ -135,9 +137,10 @@ export class AnimationSystem {
     if (walk) walk.weight += (targetWalk - walk.weight) * smoothing;
     if (run) run.weight += (targetRun - run.weight) * smoothing;
 
-    if (hasAirClip && airAction) {
-      ensure(airAction);
-      airAction.weight += (1 - airAction.weight) * smoothing;
+    if (airAction) {
+      if (hasAirClip) ensure(airAction);
+      const targetAir = hasAirClip ? 1 : 0;
+      airAction.weight += (targetAir - airAction.weight) * smoothing;
       airAction.enabled = airAction.weight > 0.001;
       airAction.timeScale = 1;
     }
