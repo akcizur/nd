@@ -28,7 +28,6 @@ export class InputRouter {
     this.touchMove = { x: 0, y: 0 };
     this.touchLook = { x: 0, y: 0 };
     this.mouseLookDelta = { x: 0, y: 0 };
-    this.lookVelocity = { x: 0, y: 0 };
 
     this.manualActions = Object.create(null);
     this.toggleActions = Object.create(null);
