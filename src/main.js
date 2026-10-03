@@ -538,7 +538,7 @@ async function start() {
   for (const box of collisionBoxes) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    physicsWorld.addStaticBox(center.x, center.y + size.y / 2, center.z, size.x, size.y, size.z);
+    physicsWorld.addStaticBox(center.x, center.y, center.z, size.x, size.y, size.z);
   }
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
