@@ -10,10 +10,51 @@ body {
   overflow: hidden;
   background: #000;
   font-family: system-ui, sans-serif;
+  touch-action: none;
 }
 
 canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.controls {
+  position: fixed;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  padding: 18px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.controls__cluster {
+  display: grid;
+  grid-template-columns: repeat(2, 58px);
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.control {
+  width: 58px;
+  height: 58px;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 16px;
+  background: rgba(0,0,0,.45);
+  color: #fff;
+  font: 600 16px/1 system-ui, sans-serif;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  touch-action: none;
+}
+
+.control.active,
+.control:active {
+  background: rgba(255,255,255,.18);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .controls { display: none; }
 }
