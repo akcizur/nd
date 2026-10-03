@@ -338,6 +338,7 @@ function enterVehicle() {
   gameplay?.enterVehicle();
   player.visible = false;
   physicsWorld?.resetObject(player, playerPhysics, car.position.clone(), car.rotation.y);
+  physicsWorld?.setCharacterEnabled(playerPhysics, false);
   car.userData.speed = 0;
   hudObjective.textContent = 'Vehicle · řízení aktivní';
   hudHint.textContent = 'WASD / šipky · E = vystoupit';
@@ -354,6 +355,7 @@ function exitVehicle() {
     side.multiplyScalar(-1);
     exitPosition.copy(car.position).add(side);
   }
+  physicsWorld?.setCharacterEnabled(playerPhysics, true);
   physicsWorld?.resetObject(player, playerPhysics, exitPosition, car.rotation.y);
   gameplay?.exitVehicle(exitPosition);
   player.rotation.y = car.rotation.y;
@@ -459,7 +461,7 @@ function animate() {
     updateVehicle(dt);
     physicsWorld?.step();
     if (!inVehicle) physicsWorld?.syncObject(player, playerPhysics);
-    if (inVehicle) vehicleController?.syncFromPhysics();
+    vehicleController?.syncFromPhysics();
     playerAnimation?.update(dt);
     updateNpcs(dt);
     updateInteractionHud();
