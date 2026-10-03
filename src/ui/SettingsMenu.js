@@ -108,9 +108,9 @@ export class SettingsMenu {
     this.sprintInput.value = settings.sprintMode;
     this.relativeInput.checked = settings.cameraRelativeMovement !== false;
     this.deadzoneInput.value = settings.touchDeadzone;
-    this.sensitivityInput.value = '1';
-    this.invertXInput.checked = false;
-    this.invertYInput.checked = false;
+    this.sensitivityInput.value = String(settings.sensitivity ?? 1);
+    this.invertXInput.checked = Boolean(settings.invertX);
+    this.invertYInput.checked = Boolean(settings.invertY);
     this._updateOutputs();
 
     const bindings = this.input?.bindings || {};
@@ -127,11 +127,13 @@ export class SettingsMenu {
 
   _cameraChanged() {
     this._updateOutputs();
-    this.onCameraSettings?.({
+    const camera = {
       sensitivity: Number(this.sensitivityInput.value),
       invertX: this.invertXInput.checked,
       invertY: this.invertYInput.checked,
-    });
+    };
+    this.input?.setControlSettings(camera);
+    this.onCameraSettings?.(camera);
   }
 
   _movementChanged() {
