@@ -15,7 +15,7 @@ const displayCode = code => ({
   KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D',
   ArrowUp: '↑', ArrowLeft: '←', ArrowDown: '↓', ArrowRight: '→',
   Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT',
-  KeyC: 'C', KeyE: 'E', Escape: 'ESC',
+  KeyC: 'C', KeyE: 'E', Escape: 'ESC', Mouse1: 'MOUSE 1', Mouse2: 'MOUSE 2', Mouse3: 'MOUSE 3', Mouse4: 'MOUSE 4', Mouse5: 'MOUSE 5',
 })[code] || String(code).replace('Key', '').replace('Digit', '');
 
 export class SettingsMenu {
