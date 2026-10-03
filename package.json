@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@mavonengine/core": "^0.0.20",
-    "three": "^0.160.0"
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "vite": "^5.4.10"
