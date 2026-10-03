@@ -16,6 +16,9 @@ export class InputRouter {
       sprintMode: saved.sprintMode,
       cameraRelativeMovement: saved.cameraRelativeMovement,
       touchDeadzone: saved.touchDeadzone,
+      sensitivity: saved.sensitivity,
+      invertX: saved.invertX,
+      invertY: saved.invertY,
       ...(settings || {}),
     };
 
