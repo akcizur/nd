@@ -283,24 +283,31 @@ function exitVehicle() {
 
 function updatePlayer(dt) {
   if (!player || inVehicle) return;
-  const x =
+
+  // On foot: directions are relative to the character/camera heading.
+  // Forward is -Z, right is +X. This keeps W/S/A/D coherent after turning.
+  const strafe =
     (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0) -
     (keys.KeyA || keys.ArrowLeft || touchState.left ? 1 : 0);
-  const z =
-    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0) -
-    (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0);
-  const input = new THREE.Vector2(x, z);
+  const forwardInput =
+    (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0) -
+    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0);
+
+  const input = new THREE.Vector2(strafe, forwardInput);
   const moving = input.lengthSq() > 0;
   if (moving) input.normalize();
 
   const speed = keys.ShiftLeft || keys.ShiftRight ? 6.2 : 3.8;
-  const move = new THREE.Vector3(input.x, 0, input.y);
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(player.quaternion);
+  const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
   const next = player.position.clone().addScaledVector(move, speed * dt);
+
   if (!blocked(next)) player.position.copy(next);
 
   if (moving) {
-    const targetAngle = Math.atan2(input.x, input.y);
-    player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, targetAngle, 0.18);
+    const targetAngle = Math.atan2(move.x, -move.z);
+    player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, targetAngle, 0.24);
   }
 
   playPlayerAnimation(moving ? (speed > 5 ? 'Run' : 'Walk') : 'Idle');
@@ -322,7 +329,9 @@ function updateVehicle(dt) {
   car.userData.speed = THREE.MathUtils.damp(current, targetSpeed, throttle ? 3.5 : 2.2, dt);
 
   const steerStrength = Math.min(Math.abs(car.userData.speed) / maxSpeed, 1) * 1.8;
-  car.rotation.y += steering * steerStrength * dt * (car.userData.speed >= 0 ? 1 : -1);
+  // Three.js +Y rotation turns the -Z forward vector toward -X.
+  // Therefore positive steering input (D/right) must rotate the car toward +X/right.
+  car.rotation.y -= steering * steerStrength * dt * (car.userData.speed >= 0 ? 1 : -1);
 
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
   const next = car.position.clone().addScaledVector(forward, car.userData.speed * dt);
