@@ -90,18 +90,16 @@ export class PhysicsWorld {
     return { body, collider, bodyOffsetY: 0.65 };
   }
 
-  setVehicleState(vehicle, { velocity, yaw }) {
+  setVehicleState(vehicle, { velocity, yaw, dt }) {
     if (!vehicle) return;
-    const half = yaw * 0.5;
-    vehicle.body.setRotation(
-      { x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) },
-      true
-    );
+    const rotation = vehicle.body.rotation();
+    const currentYaw = Math.atan2(2 * (rotation.w * rotation.y), 1 - 2 * (rotation.y * rotation.y));
+    const delta = Math.atan2(Math.sin(yaw - currentYaw), Math.cos(yaw - currentYaw));
     vehicle.body.setLinvel(
       { x: velocity.x, y: vehicle.body.linvel().y, z: velocity.z },
       true
     );
-    vehicle.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    vehicle.body.setAngvel({ x: 0, y: delta / Math.max(dt, 1e-4), z: 0 }, true);
   }
 
   syncObject(object, physicsObject) {
