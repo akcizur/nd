@@ -21,7 +21,7 @@ export const DEFAULT_CONTROL_SETTINGS = Object.freeze({
   invertY: false,
 });
 
-const STORAGE_KEY = 'nd.control-settings.v2';
+const STORAGE_KEY = 'nd.control-settings.v3';
 
 function cloneBindings(bindings) {
   return Object.fromEntries(Object.entries(bindings).map(([action, codes]) => [action, [...codes]]));
