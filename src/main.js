@@ -447,6 +447,9 @@ async function start() {
   vehiclePhysics = physicsWorld.createVehicle(car);
   playerController.bindPhysics(playerPhysics);
   vehicleController.bindPhysics(vehiclePhysics);
+  physicsWorld.step(1 / 60);
+  physicsWorld.syncObject(player, playerPhysics);
+  physicsWorld.syncObject(car, vehiclePhysics);
   checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
   hudObjective.textContent = 'Ready · PLAY';
