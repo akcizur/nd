@@ -10,6 +10,7 @@ export class InputManager {
   setMove(x, y) { this.router.setMove(x, y); }
   setCamera(x, y) { this.router.setLook(x, y); }
   setAction(name, value = true) { this.router.setAction(name, value); }
+  toggleAction(name) { return this.router.toggleAction(name); }
   pulseAction(name) { this.router.pulseAction(name); }
   consume(name) { return this.router.consume(name); }
 
