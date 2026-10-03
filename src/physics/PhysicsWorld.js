@@ -286,18 +286,6 @@ export class PhysicsWorld {
     }
   }
 
-  setVehicleState(vehicle, { velocity, yaw, dt }) {
-    if (!vehicle) return;
-    const rotation = vehicle.body.rotation();
-    const currentYaw = Math.atan2(2 * (rotation.w * rotation.y), 1 - 2 * (rotation.y * rotation.y));
-    const delta = Math.atan2(Math.sin(yaw - currentYaw), Math.cos(yaw - currentYaw));
-    vehicle.body.setLinvel(
-      { x: velocity.x, y: vehicle.body.linvel().y, z: velocity.z },
-      true
-    );
-    vehicle.body.setAngvel({ x: 0, y: delta / Math.max(dt, 1e-4), z: 0 }, true);
-  }
-
   syncObject(object, physicsObject) {
     if (!object || !physicsObject) return;
     const p = physicsObject.body.translation();
