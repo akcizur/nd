@@ -280,7 +280,9 @@ function restartGame() {
   cameraSystem && (cameraSystem.yaw = 0, cameraSystem.pitch = .28);
   vehicleController && (vehicleController.speed = 0);
   physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
+  playerController && (playerController.velocityY = 0, playerController.grounded = true);
   physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
+  vehicleController && (vehicleController.speed = 0, vehicleController.yaw = 0);
   player.rotation.set(0, 0, 0);
   player.visible = true;
   car.userData.speed = 0;
