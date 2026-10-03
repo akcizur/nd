@@ -269,3 +269,152 @@ button { -webkit-tap-highlight-color: transparent; }
     gap: 12px;
   }
 }
+
+
+.menu-card--settings {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.settings-section {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+
+.settings-section__title {
+  margin-bottom: 12px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  color: var(--text-dim);
+}
+
+.setting-row--stack {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 14px;
+}
+
+.setting-row--stack > input,
+.setting-row--stack > output {
+  grid-column: 1 / -1;
+}
+
+.setting-row select {
+  min-width: 110px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  color: #fff;
+}
+
+.setting-row output {
+  justify-self: end;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.binding-list {
+  display: grid;
+  gap: 6px;
+}
+
+.binding-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(92px, 42%);
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.binding-row button {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  background: rgba(255,255,255,.045);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.binding-row button:hover,
+.binding-row button:focus-visible {
+  border-color: rgba(255,255,255,.38);
+  background: rgba(255,255,255,.09);
+}
+
+.remap-status {
+  min-height: 18px;
+}
+
+.settings-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.settings-actions button {
+  width: 100%;
+  margin-top: 0;
+}
+
+.mobile-actions {
+  align-items: end;
+}
+
+.mobile-actions button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+}
+
+.mobile-action__label {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.mobile-actions button small {
+  font-size: 7px;
+  letter-spacing: .08em;
+  opacity: .6;
+}
+
+.mobile-actions button[hidden] {
+  display: none;
+}
+
+.mobile-controls[data-mode="vehicle"] .mobile-actions {
+  right: max(22px, env(safe-area-inset-right));
+}
+
+@media (max-width: 600px) {
+  .menu-card--settings {
+    width: min(520px, calc(100vw - 24px));
+    padding: 18px;
+  }
+
+  .binding-row {
+    grid-template-columns: 1fr 40%;
+  }
+
+  .mobile-actions {
+    gap: 8px;
+    bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-actions button {
+    width: clamp(48px, 13vw, 58px);
+    height: clamp(48px, 13vw, 58px);
+  }
+}
