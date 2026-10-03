@@ -24,6 +24,7 @@ export class InputRouter {
     this.gamepad = null;
     this.touchMove = { x: 0, y: 0 };
     this.touchLook = { x: 0, y: 0 };
+    this.mouseLookDelta = { x: 0, y: 0 };
     this.enabled = true;
     this.mouseLook = false;
     this.previousPadButtons = [];
@@ -47,6 +48,11 @@ export class InputRouter {
     addEventListener('mouseup', event => {
       if (event.button === 2) this.mouseLook = false;
     });
+    addEventListener('mousemove', event => {
+      if (!this.mouseLook || !this.enabled) return;
+      this.mouseLookDelta.x += event.movementX || 0;
+      this.mouseLookDelta.y += event.movementY || 0;
+    });
     addEventListener('contextmenu', event => event.preventDefault());
   }
 
@@ -69,14 +75,32 @@ export class InputRouter {
   consume(name) { return this.input.consume(name); }
 
   update() {
-    if (!this.enabled) { this.input.reset(); return; }
+    if (!this.enabled) {
+      this.input.reset();
+      this.mouseLookDelta.x = 0;
+      this.mouseLookDelta.y = 0;
+      return;
+    }
 
     const x = (this._down('moveRight') ? 1 : 0) - (this._down('moveLeft') ? 1 : 0);
     const y = (this._down('moveForward') ? 1 : 0) - (this._down('moveBackward') ? 1 : 0);
     const pad = navigator.getGamepads?.()[this.gamepad?.index ?? -1];
     let moveX = x, moveY = y, lookX = 0, lookY = 0;
-    if (Math.abs(this.touchMove.x) > 0.001 || Math.abs(this.touchMove.y) > 0.001) { moveX=this.touchMove.x; moveY=this.touchMove.y; }
-    lookX=this.touchLook.x; lookY=this.touchLook.y;
+
+    if (Math.abs(this.touchMove.x) > 0.001 || Math.abs(this.touchMove.y) > 0.001) {
+      moveX=this.touchMove.x;
+      moveY=this.touchMove.y;
+    }
+
+    // Mouse camera: right-button drag. Convert pixels to the same normalized
+    // look range used by touch/gamepad, then consume the delta once per frame.
+    if (this.mouseLookDelta.x || this.mouseLookDelta.y) {
+      lookX = THREE_LIKE_CLAMP(this.mouseLookDelta.x * 0.012, -1, 1);
+      lookY = THREE_LIKE_CLAMP(this.mouseLookDelta.y * 0.012, -1, 1);
+    } else {
+      lookX=this.touchLook.x;
+      lookY=this.touchLook.y;
+    }
 
     if (pad) {
       moveX = Math.abs(pad.axes[0] ?? 0) > 0.12 ? pad.axes[0] : moveX;
@@ -97,6 +121,8 @@ export class InputRouter {
 
     this.input.setMove(Math.max(-1, Math.min(1, moveX)), Math.max(-1, Math.min(1, moveY)));
     this.input.setLook(lookX, lookY);
+    this.mouseLookDelta.x = 0;
+    this.mouseLookDelta.y = 0;
     this.input.setAction('sprint', this._down('sprint') || this.input.actions.sprint);
     this.input.setAction('crouch', this._down('crouch') || this.input.actions.crouch);
     this.input.setAction('aim', this.mouseLook || this.input.actions.aim);
@@ -111,4 +137,8 @@ export class InputRouter {
   _down(action) {
     return (this.bindings[action] || []).some(code => Boolean(this.keys[code]));
   }
+}
+
+function THREE_LIKE_CLAMP(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
