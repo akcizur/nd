@@ -12,6 +12,8 @@ export class PhysicsWorld {
     this.fixedDt = 1 / 60;
     this.accumulator = 0;
     this.maxSubsteps = 8;
+    this.stepCount = 0;
+    this.lastSteps = 0;
     this.characterController = world.createCharacterController(0.02);
     this.characterController.setUp({ x: 0, y: 1, z: 0 });
     this.characterController.setMaxSlopeClimbAngle(Math.PI * 0.43);
@@ -143,9 +145,11 @@ export class PhysicsWorld {
       beforeStep?.(this.fixedDt);
       this.world.step();
       this.accumulator -= this.fixedDt;
+      this.stepCount += 1;
       steps += 1;
     }
     if (this.accumulator >= this.fixedDt) this.accumulator = 0;
+    this.lastSteps = steps;
     return steps;
   }
 }
