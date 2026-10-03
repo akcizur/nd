@@ -281,9 +281,14 @@ const gameMenu = new GameMenu({
   onSettings: () => openSettings(GameState.PAUSED),
   onMainMenu: () => returnToMainMenu(),
 });
-const cameraSettings = { sensitivity: 1, invertX: false, invertY: false };
+const savedControls = input.controlSettings;
+const cameraSettings = {
+  sensitivity: savedControls.sensitivity ?? 1,
+  invertX: savedControls.invertX ?? false,
+  invertY: savedControls.invertY ?? false,
+};
 const movementSettings = {
-  sprintMode: input.controlSettings.sprintMode,
+  sprintMode: savedControls.sprintMode,
   cameraRelativeMovement: input.controlSettings.cameraRelativeMovement,
   touchDeadzone: input.controlSettings.touchDeadzone,
 };
