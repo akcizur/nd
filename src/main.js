@@ -550,12 +550,22 @@ function updatePlayer(dt) {
     ? playerController.sprintSpeed
     : playerController.runSpeed;
 
-  // Animation follows physical velocity, not the raw key/joystick state.
-  // This makes acceleration, braking and sprint transitions visibly dynamic.
+  // Feed animation from actual physical velocity. The vector is projected
+  // into the character's local forward/right axes so UAL directional clips
+  // remain correct even when the camera and character face different ways.
+  const forwardAxis = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+  const rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(player.quaternion);
+  const velocity = playerController.horizontalVelocity;
+  const forwardAmount = velocity.dot(forwardAxis) / Math.max(0.001, speed);
+  const strafeAmount = velocity.dot(rightAxis) / Math.max(0.001, speed);
+
   playerAnimation?.updateLocomotion({
     speed,
     maxSpeed,
     grounded: playerController.grounded,
+    forward: forwardAmount,
+    strafe: strafeAmount,
+    crouched: Boolean(playerController.input.crouch),
     dt,
   });
 
