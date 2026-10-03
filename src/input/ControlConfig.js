@@ -16,51 +16,39 @@ export const DEFAULT_CONTROL_SETTINGS = Object.freeze({
   sprintMode: 'hold',
   cameraRelativeMovement: true,
   touchDeadzone: 0.08,
+  sensitivity: 1,
+  invertX: false,
+  invertY: false,
 });
 
 const STORAGE_KEY = 'nd.control-settings.v2';
 
 function cloneBindings(bindings) {
-  return Object.fromEntries(
-    Object.entries(bindings).map(([action, codes]) => [action, [...codes]])
-  );
+  return Object.fromEntries(Object.entries(bindings).map(([action, codes]) => [action, [...codes]]));
+}
+
+export function defaultControlSettings() {
+  return { bindings: cloneBindings(DEFAULT_BINDINGS), ...DEFAULT_CONTROL_SETTINGS };
 }
 
 export function loadControlSettings() {
-  const fallback = {
-    bindings: cloneBindings(DEFAULT_BINDINGS),
-    ...DEFAULT_CONTROL_SETTINGS,
-  };
-
+  const fallback = defaultControlSettings();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
-
     const saved = JSON.parse(raw);
-    return {
-      ...fallback,
-      ...saved,
-      bindings: {
-        ...fallback.bindings,
-        ...(saved?.bindings || {}),
-      },
-    };
+    return { ...fallback, ...saved, bindings: { ...fallback.bindings, ...(saved?.bindings || {}) } };
   } catch {
     return fallback;
   }
 }
 
 export function saveControlSettings(settings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Storage can be unavailable in private/restricted browser contexts.
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch {}
 }
 
 export function resetControlSettings() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {}
-  return loadControlSettings();
+  const defaults = defaultControlSettings();
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  return defaults;
 }
