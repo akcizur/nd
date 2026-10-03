@@ -1,3 +1,10 @@
+const THREEClamp = value => Math.max(-1, Math.min(1, Number(value) || 0));
+const quatForward = q => ({
+  x: -2 * (q.x * q.z + q.w * q.y),
+  y: 0,
+  z: -(1 - 2 * (q.x * q.x + q.y * q.y)),
+});
+
 import RAPIER from '@dimforge/rapier3d-compat';
 
 export class PhysicsWorld {
@@ -21,6 +28,7 @@ export class PhysicsWorld {
     this.characterController.enableAutostep(0.35, 0.18, false);
     this.characterController.enableSnapToGround(0.15);
     this.characterController.setApplyImpulsesToDynamicBodies(true);
+    this.vehicleSolvers = new Set();
   }
 
   addStaticBox(x, y, z, w, h, d) {
@@ -92,6 +100,106 @@ export class PhysicsWorld {
     return { body, collider, bodyOffsetY: 0.65 };
   }
 
+  createVehicleDynamics(vehicle, options = {}) {
+    const dynamics = {
+      maxForward: options.maxForward ?? 13,
+      maxReverse: options.maxReverse ?? 6,
+      engineForce: options.engineForce ?? 9000,
+      brakeForce: options.brakeForce ?? 12000,
+      handbrakeForce: options.handbrakeForce ?? 7000,
+      lateralGrip: options.lateralGrip ?? 8.5,
+      rollingResistance: options.rollingResistance ?? 1.2,
+      airResistance: options.airResistance ?? 0.018,
+      steeringMax: options.steeringMax ?? 0.58,
+      wheelBase: options.wheelBase ?? 2.35,
+      trackWidth: options.trackWidth ?? 1.55,
+      wheelRadius: options.wheelRadius ?? 0.34,
+      suspensionRest: options.suspensionRest ?? 0.42,
+      suspensionTravel: options.suspensionTravel ?? 0.22,
+      spring: options.spring ?? 18000,
+      damper: options.damper ?? 2400,
+      mass: options.mass ?? 1400,
+      wheels: options.wheels ?? [],
+      steer: 0,
+      throttle: 0,
+      brake: 0,
+      handbrake: false,
+      grounded: 0,
+      suspension: [],
+    };
+    dynamics.suspension = dynamics.wheels.map(() => ({ compression: 0, contact: false, normal: { x: 0, y: 1, z: 0 } }));
+    vehicle.dynamics = dynamics;
+    this.vehicleSolvers.add(vehicle);
+    return dynamics;
+  }
+
+  setVehicleInput(vehicle, input) {
+    if (!vehicle?.dynamics) return;
+    Object.assign(vehicle.dynamics, {
+      throttle: THREEClamp(input.throttle),
+      brake: THREEClamp(input.brake),
+      steer: THREEClamp(input.steer),
+      handbrake: Boolean(input.handbrake),
+    });
+  }
+
+  solveVehicle(vehicle, dt) {
+    const d = vehicle?.dynamics;
+    if (!d) return;
+    const body = vehicle.body;
+    const p = body.translation();
+    const r = body.rotation();
+    const forward = quatForward(r);
+    const right = { x: -forward.z, y: 0, z: forward.x };
+    const velocity = body.linvel();
+    const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z;
+    const lateralSpeed = velocity.x * right.x + velocity.z * right.z;
+
+    const engine = d.throttle * d.engineForce;
+    const brake = d.brake * d.brakeForce + (d.handbrake ? d.handbrakeForce : 0);
+    let longitudinal = engine;
+    if (d.brake > 0 && forwardSpeed > 0.25) longitudinal -= Math.min(brake, Math.abs(forwardSpeed) * d.mass / Math.max(dt, 1e-4));
+    else if (d.brake > 0 && forwardSpeed <= 0.25) longitudinal -= d.brake * d.engineForce * 0.65;
+    const resistance = d.rollingResistance * forwardSpeed + d.airResistance * forwardSpeed * Math.abs(forwardSpeed);
+    longitudinal -= resistance;
+
+    const lateralForce = -lateralSpeed * d.lateralGrip * d.mass;
+    const accel = {
+      x: (forward.x * longitudinal + right.x * lateralForce) / d.mass,
+      y: 0,
+      z: (forward.z * longitudinal + right.z * lateralForce) / d.mass,
+    };
+    body.applyImpulse({ x: accel.x * d.mass * dt, y: 0, z: accel.z * d.mass * dt }, true);
+
+    const steerLimit = d.steeringMax * (1 - Math.min(1, Math.abs(forwardSpeed) / 22) * 0.35);
+    const steerAngle = d.steer * steerLimit;
+    const yawRate = Math.tan(steerAngle) * forwardSpeed / Math.max(d.wheelBase, 0.1);
+    body.setAngvel({ x: 0, y: yawRate * 0.85, z: body.angvel().z }, true);
+
+    const down = { x: 0, y: -1, z: 0 };
+    let contacts = 0;
+    d.wheels.forEach((wheel, i) => {
+      const local = wheel.local ?? { x: 0, y: -0.45, z: 0 };
+      const worldPos = {
+        x: p.x + local.x,
+        y: p.y + local.y,
+        z: p.z + local.z,
+      };
+      const ray = this.world.castRay(new RAPIER.Ray(worldPos, down), d.suspensionRest + d.suspensionTravel, true, undefined, undefined, vehicle.collider);
+      if (ray) {
+        const hit = ray.toi;
+        const compression = Math.max(0, Math.min(1, (d.suspensionRest - hit) / Math.max(d.suspensionTravel, 0.01)));
+        d.suspension[i].compression = compression;
+        d.suspension[i].contact = true;
+        contacts++;
+      } else {
+        d.suspension[i].compression = 0;
+        d.suspension[i].contact = false;
+      }
+    });
+    d.grounded = contacts;
+  }
+
   setVehicleState(vehicle, { velocity, yaw, dt }) {
     if (!vehicle) return;
     const rotation = vehicle.body.rotation();
@@ -143,6 +251,7 @@ export class PhysicsWorld {
     let steps = 0;
     while (this.accumulator >= this.fixedDt && steps < this.maxSubsteps) {
       beforeStep?.(this.fixedDt);
+      for (const vehicle of this.vehicleSolvers) this.solveVehicle(vehicle, this.fixedDt);
       this.world.step();
       this.accumulator -= this.fixedDt;
       this.stepCount += 1;
