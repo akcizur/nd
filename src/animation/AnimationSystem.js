@@ -116,9 +116,11 @@ export class AnimationSystem {
 
     // Smooth the weights so acceleration/braking produces a natural blend.
     const smoothing = 1 - Math.exp(-10 * dt);
-    const targetIdle = grounded ? 1 - walkZone : 0;
-    const targetWalk = grounded ? Math.max(0, walkZone - runZone) : 0;
-    const targetRun = grounded ? runZone : 0;
+    const hasAirClip = !grounded && (this.actions.jump || this.actions.fall);
+    const airAction = this.actions.jump || this.actions.fall;
+    const targetIdle = hasAirClip ? 0 : (grounded ? 1 - walkZone : 0);
+    const targetWalk = hasAirClip ? 0 : Math.max(0, walkZone - runZone);
+    const targetRun = hasAirClip ? 0 : runZone;
 
     const ensure = action => {
       if (!action) return;
@@ -133,6 +135,13 @@ export class AnimationSystem {
     if (walk) walk.weight += (targetWalk - walk.weight) * smoothing;
     if (run) run.weight += (targetRun - run.weight) * smoothing;
 
+    if (hasAirClip && airAction) {
+      ensure(airAction);
+      airAction.weight += (1 - airAction.weight) * smoothing;
+      airAction.enabled = airAction.weight > 0.001;
+      airAction.timeScale = 1;
+    }
+
     idle.enabled = idle.weight > 0.001;
     if (walk) walk.enabled = walk.weight > 0.001;
     if (run) run.enabled = run.weight > 0.001;
@@ -143,7 +152,9 @@ export class AnimationSystem {
     if (run) run.timeScale = Math.max(0.65, speed / 6.2);
     idle.timeScale = 1;
 
-    this.state = normalized < 0.03 ? 'idle' : normalized < 0.62 ? 'walk' : 'run';
+    this.state = !grounded && hasAirClip
+      ? (this.actions.jump ? 'jump' : 'fall')
+      : normalized < 0.03 ? 'idle' : normalized < 0.62 ? 'walk' : 'run';
   }
 
   setUpperBody(action) {
