@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { CharacterPackLoader } from './assets/CharacterPackLoader.js';
+import { BuildingPackLoader } from './assets/BuildingPackLoader.js';
 import './style.css';
 import { MavonGameplayBridge } from './game/mavonLayer.js';
 import { GameState, GameStateManager } from './core/GameState.js';
@@ -51,6 +52,10 @@ floor.receiveShadow = true;
 world.add(floor);
 
 const collisionBoxes = [];
+const proceduralBuildings = [];
+const buildingPackGroup = new THREE.Group();
+buildingPackGroup.name = 'BuildingPack';
+world.add(buildingPackGroup);
 function box(x, y, z, w, h, d, color, collision = false) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
@@ -82,7 +87,8 @@ for (let x = -96; x <= 96; x += 24) {
     const w = 13 + (seed % 5);
     const d = 13 + ((seed >> 3) % 5);
     const h = 6 + (seed % 15);
-    box(x, h / 2, z, w, h, d, buildingColors[seed % buildingColors.length], true);
+    const building = box(x, h / 2, z, w, h, d, buildingColors[seed % buildingColors.length], false);
+    proceduralBuildings.push(building);
   }
 }
 
@@ -121,6 +127,8 @@ car.position.set(0, 0, 5);
 world.add(car);
 
 const loader = new GLTFLoader();
+const characterPack = new CharacterPackLoader(loader);
+const buildingPack = new BuildingPackLoader(loader);
 const SOLDIER_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Soldier.glb';
 const GOBKIT_URLS = [
   'https://gobkit.com/freebies/minion/minion-a01.glb',
@@ -141,41 +149,74 @@ let gameplay = null;
 let playerPhysics = null;
 let vehiclePhysics = null;
 
+let universalAnimations = [];
+
 async function loadPlayer() {
-  const gltf = await loader.loadAsync(SOLDIER_URL);
-  player = gltf.scene;
-  player.scale.setScalar(1.05);
-  player.position.set(0, 0, 1);
-  player.traverse(node => {
-    if (node.isMesh) {
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
-  });
+  const gltf = await characterPack.loadUniversal();
+  player = characterPack.clone(gltf, new THREE.Vector3(0, 0, 1), 1.0);
   world.add(player);
   playerAnimation = new AnimationSystem(player);
-  playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations);
+  playerAnimation.bind(new THREE.AnimationMixer(player), []);
+  const animationGltf = await characterPack.loadAnimationLibrary();
+  universalAnimations = characterPack.retargetClips(animationGltf.animations, player);
+  playerAnimation.addClips(universalAnimations);
+  playerAnimation.play('idle', 0);
+}
+
+async function loadBuildings() {
+  try {
+    const models = await buildingPack.loadPack();
+    for (const mesh of proceduralBuildings) mesh.removeFromParent();
+    collisionBoxes.length = 0;
+
+    let index = 0;
+    for (let x = -96; x <= 96; x += 24) {
+      for (let z = -96; z <= 96; z += 24) {
+        if (Math.abs(x) < 15 || Math.abs(z) < 15) continue;
+        const source = models[index++ % models.length];
+        const targetHeight = 9 + ((Math.abs(x * 13 + z * 7) % 16));
+        const model = buildingPack.instantiate(source, new THREE.Vector3(x, 0, z), 1);
+        let bounds = buildingPack.getBounds(model);
+        const height = Math.max(0.1, bounds.max.y - bounds.min.y);
+        model.scale.multiplyScalar(targetHeight / height);
+        model.updateMatrixWorld(true);
+        bounds = buildingPack.getBounds(model);
+        model.position.y -= bounds.min.y;
+        model.rotation.y = ((index * 37) % 360) * Math.PI / 180;
+        model.updateMatrixWorld(true);
+        bounds = buildingPack.getBounds(model);
+        buildingPackGroup.add(model);
+
+        const size = bounds.getSize(new THREE.Vector3());
+        const center = bounds.getCenter(new THREE.Vector3());
+        collisionBoxes.push(new THREE.Box3(
+          new THREE.Vector3(center.x - size.x * 0.42, 0, center.z - size.z * 0.42),
+          new THREE.Vector3(center.x + size.x * 0.42, Math.max(1, size.y), center.z + size.z * 0.42)
+        ));
+      }
+    }
+  } catch (error) {
+    console.warn('Building pack failed; keeping procedural city.', error);
+  }
 }
 
 const npcs = [];
-async function loadNpc(url, position) {
+async function loadNpc(url, position, universal = false) {
   try {
-    const gltf = await loader.loadAsync(url);
-    const model = SkeletonUtils.clone(gltf.scene);
-    model.position.copy(position);
-    model.scale.setScalar(1.1);
-    model.traverse(node => {
-      if (node.isMesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
-      }
-    });
+    const gltf = await (universal ? characterPack.loadUniversal() : characterPack.load(url));
+    const model = characterPack.clone(gltf, position, universal ? 0.92 : 1.1);
     world.add(model);
     const mixer = new THREE.AnimationMixer(model);
-    const master = gltf.animations[0];
-    if (master) {
-      const idle = THREE.AnimationUtils.subclip(master, 'Idle', 0, 29, 24);
-      mixer.clipAction(idle).play();
+    const clips = universal
+      ? characterPack.retargetClips(universalAnimations, model)
+      : gltf.animations;
+    for (const clip of clips) mixer.clipAction(clip).play();
+    if (universal) {
+      const idle = clips.find(clip => /idle|stand|breath/i.test(clip.name));
+      if (idle) {
+        mixer.stopAllAction();
+        mixer.clipAction(idle).play();
+      }
     }
     npcs.push({ model, mixer, phase: Math.random() * Math.PI * 2 });
   } catch (error) {
@@ -185,11 +226,14 @@ async function loadNpc(url, position) {
 
 async function loadCharacters() {
   await loadPlayer();
-  await Promise.all(
-    GOBKIT_URLS.map((url, index) =>
-      loadNpc(url, new THREE.Vector3((index - 1) * 5, 0, -8 - index * 3))
-    )
-  );
+  await loadBuildings();
+  await Promise.all([
+    loadNpc(null, new THREE.Vector3(-7, 0, -8), true),
+    loadNpc(null, new THREE.Vector3(7, 0, -12), true),
+    ...GOBKIT_URLS.map((url, index) =>
+      loadNpc(url, new THREE.Vector3((index - 1) * 5, 0, -18 - index * 3))
+    ),
+  ]);
 }
 
 const input = new InputManager();
