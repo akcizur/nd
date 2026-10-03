@@ -251,6 +251,7 @@ function toggleVehicle() {
 function enterVehicle() {
   interactLocked = true;
   inVehicle = true;
+  gameplay?.enterVehicle();
   player.visible = false;
   player.position.copy(car.position);
   car.userData.speed = 0;
@@ -269,6 +270,7 @@ function exitVehicle() {
     exitPosition.copy(car.position).add(side);
   }
   player.position.copy(exitPosition);
+  gameplay?.exitVehicle(exitPosition);
   player.rotation.y = car.rotation.y;
   player.visible = true;
   inVehicle = false;
@@ -371,6 +373,7 @@ const clock = new THREE.Clock();
 async function start() {
   hudObjective.textContent = 'Načítám character pack…';
   await loadCharacters();
+  gameplay = new MavonGameplayBridge({ player, vehicle: car });
   hudObjective.textContent = 'Volný pohyb městem';
   animate();
 }
