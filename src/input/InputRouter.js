@@ -121,6 +121,11 @@ export class InputRouter {
     this.manualActions[name] = Boolean(value);
   }
 
+  toggleAction(name) {
+    this.manualActions[name] = !Boolean(this.manualActions[name]);
+    return this.manualActions[name];
+  }
+
   pulseAction(name) {
     this.pendingPulses.add(name);
   }
@@ -130,10 +135,15 @@ export class InputRouter {
   }
 
   setSettings(next) {
+    const previousSprintMode = this.settings.sprintMode;
     this.settings = {
       ...this.settings,
       ...(next || {}),
     };
+    if (previousSprintMode !== this.settings.sprintMode && this.settings.sprintMode === 'hold') {
+      this.toggleActions.sprint = false;
+      this.manualActions.sprint = false;
+    }
     this.save();
   }
 
