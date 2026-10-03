@@ -26,6 +26,7 @@ export class InputRouter {
     this.touchLook = { x: 0, y: 0 };
     this.enabled = true;
     this.mouseLook = false;
+    this.previousPadButtons = [];
     this._bindKeyboard();
     this._bindGamepad();
   }
@@ -82,13 +83,16 @@ export class InputRouter {
       moveY = Math.abs(pad.axes[1] ?? 0) > 0.12 ? -(pad.axes[1] ?? 0) : moveY;
       if (Math.abs(pad.axes[2] ?? 0) > 0.12) lookX=pad.axes[2];
       if (Math.abs(pad.axes[3] ?? 0) > 0.12) lookY=pad.axes[3];
-      if (pad.buttons[0]?.pressed) this.input.setAction('jump', true);
+      if (this._pressed(pad, 0)) this.input.setAction('jump', true);
       this.input.setAction('sprint', Boolean(pad.buttons[10]?.pressed));
       this.input.setAction('crouch', Boolean(pad.buttons[1]?.pressed));
       this.input.setAction('aim', Boolean(pad.buttons[6]?.pressed));
       this.input.setAction('handbrake', Boolean(pad.buttons[7]?.pressed));
-      if (pad.buttons[2]?.pressed) this.input.pulse('interact');
-      if (pad.buttons[9]?.pressed) this.input.pulse('pause');
+      if (this._pressed(pad, 2)) this.input.pulse('interact');
+      if (this._pressed(pad, 9)) this.input.pulse('pause');
+      this.previousPadButtons = pad.buttons.map(button => Boolean(button?.pressed));
+    } else {
+      this.previousPadButtons = [];
     }
 
     this.input.setMove(Math.max(-1, Math.min(1, moveX)), Math.max(-1, Math.min(1, moveY)));
@@ -97,6 +101,11 @@ export class InputRouter {
     this.input.setAction('crouch', this._down('crouch') || this.input.actions.crouch);
     this.input.setAction('aim', this.mouseLook || this.input.actions.aim);
     this.input.setAction('handbrake', this._down('handbrake') || this.input.actions.handbrake);
+  }
+
+  _pressed(pad, index) {
+    const current = Boolean(pad.buttons[index]?.pressed);
+    return current && !Boolean(this.previousPadButtons[index]);
   }
 
   _down(action) {
