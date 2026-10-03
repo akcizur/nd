@@ -3,6 +3,7 @@ import {
   DEFAULT_BINDINGS,
   loadControlSettings,
   saveControlSettings,
+  resetControlSettings as getDefaultControlSettings,
 } from './ControlConfig.js';
 
 export class InputRouter {
@@ -141,12 +142,15 @@ export class InputRouter {
   }
 
   resetSettings() {
-    const defaults = loadControlSettings();
+    const defaults = getDefaultControlSettings();
     this.bindings = structuredClone(defaults.bindings);
     this.settings = {
       sprintMode: defaults.sprintMode,
       cameraRelativeMovement: defaults.cameraRelativeMovement,
       touchDeadzone: defaults.touchDeadzone,
+      sensitivity: defaults.sensitivity,
+      invertX: defaults.invertX,
+      invertY: defaults.invertY,
     };
     this.toggleActions = Object.create(null);
     this.manualActions = Object.create(null);
