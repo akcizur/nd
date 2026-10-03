@@ -5,6 +5,8 @@ import './style.css';
 import { MavonGameplayBridge } from './game/mavonLayer.js';
 import { GameState, GameStateManager } from './core/GameState.js';
 import { InputManager } from './core/InputManager.js';
+import { SystemRegistry } from './core/SystemRegistry.js';
+import { DebugOverlay } from './core/DebugOverlay.js';
 import { MobileControls } from './mobile/MobileControls.js';
 import { MainMenu } from './ui/MainMenu.js';
 import { GameMenu } from './ui/GameMenu.js';
@@ -191,6 +193,8 @@ async function loadCharacters() {
 }
 
 const input = new InputManager();
+const systems = new SystemRegistry();
+const debug = new DebugOverlay({ enabled: new URLSearchParams(location.search).has('debug') });
 const gameState = new GameStateManager(GameState.MAIN_MENU);
 const mobileControls = new MobileControls(input);
 let cameraYaw = 0;
@@ -480,6 +484,13 @@ async function start() {
   physicsWorld.syncObject(car, vehiclePhysics);
   checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
+  systems.register('player-controller', { fixedUpdate: updatePlayer });
+  systems.register('vehicle-controller', { fixedUpdate: updateVehicle });
+  systems.register('animation', { update: dt => playerAnimation?.update(dt) });
+  systems.register('npcs', { update: updateNpcs });
+  systems.register('interaction', { update: updateInteractionHud });
+  systems.register('camera', { update: updateCamera });
+  systems.register('debug', { update: dt => debug.update({ dt, gameState: gameState.current, player: playerPhysics, vehicle: vehiclePhysics, physics: physicsWorld, inVehicle }) });
   hudObjective.textContent = 'Ready · PLAY';
   mainMenu.show();
   animate();
@@ -491,17 +502,13 @@ function animate() {
   input.update();
   if (gameState.current === GameState.PLAYING) {
     physicsWorld?.step(dt, fixedDt => {
-      updatePlayer(fixedDt);
-      updateVehicle(fixedDt);
+      systems.fixedUpdate(fixedDt);
     });
     physicsWorld?.syncObject(player, playerPhysics);
     vehicleController?.syncFromPhysics();
-    playerAnimation?.update(dt);
-    updateNpcs(dt);
-    updateInteractionHud();
+    systems.update(dt);
     const missionPosition = inVehicle ? car.position : player.position;
     if (checkpoints?.update(missionPosition)) hudObjective.textContent = 'MISSION COMPLETE · FREE ROAM';
-    updateCamera(dt);
   }
   renderer.render(scene, camera);
 }
