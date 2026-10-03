@@ -1,62 +1,56 @@
-import * as THREE from 'three';
+import { InputRouter } from '../input/InputRouter.js';
 
 export class InputManager {
-  constructor() {
-    this.keys = Object.create(null);
-    this.touch = { move: new THREE.Vector2(), camera: new THREE.Vector2(), interact: false, handbrake: false, pause: false };
-    this.enabled = true;
-    this._bindKeyboard();
+  constructor(options = {}) {
+    this.router = new InputRouter(options);
+    this.input = this.router.input;
   }
 
-  _bindKeyboard() {
-    addEventListener('keydown', event => {
-      this.keys[event.code] = true;
-      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code)) event.preventDefault();
-      if (event.code === 'Escape' && !event.repeat) this.touch.pause = true;
-      if (event.code === 'KeyE' && !event.repeat) this.touch.interact = true;
-      if (event.code === 'Space' && !event.repeat) this.touch.handbrake = true;
-    });
-    addEventListener('keyup', event => {
-      this.keys[event.code] = false;
-      if (event.code === 'Space') this.touch.handbrake = false;
-    });
+  update() {
+    this.router.update();
   }
 
   setMove(x, y) {
-    this.touch.move.set(x, y);
+    this.router.setTouchMove(x, y);
   }
 
   setCamera(x, y) {
-    this.touch.camera.set(x, y);
+    this.router.setTouchLook(x, y);
   }
 
   setAction(name, value = true) {
-    this.touch[name] = value;
+    this.input.setAction(name, value);
   }
 
   consume(name) {
-    const value = Boolean(this.touch[name]);
-    this.touch[name] = false;
-    return value;
+    return this.input.consume(name);
+  }
+
+  remap(action, codeOrCodes) {
+    return this.router.remap(action, codeOrCodes);
   }
 
   get move() {
-    const x = (this.keys.KeyD || this.keys.ArrowRight ? 1 : 0) - (this.keys.KeyA || this.keys.ArrowLeft ? 1 : 0);
-    const y = (this.keys.KeyW || this.keys.ArrowUp ? 1 : 0) - (this.keys.KeyS || this.keys.ArrowDown ? 1 : 0);
-    const result = new THREE.Vector2(x + this.touch.move.x, y + this.touch.move.y);
-    if (result.lengthSq() > 1) result.normalize();
-    return result;
+    return this.input.move.clone();
   }
 
   get cameraInput() {
-    return this.touch.camera.clone();
+    return this.input.look.clone();
   }
 
   get run() {
-    return Boolean(this.keys.ShiftLeft || this.keys.ShiftRight);
+    return this.input.sprint;
   }
 
   get handbrake() {
-    return Boolean(this.keys.Space || this.touch.handbrake);
+    return this.input.handbrake;
+  }
+
+  get enabled() {
+    return this.router.enabled;
+  }
+
+  set enabled(value) {
+    this.router.enabled = Boolean(value);
   }
 }
