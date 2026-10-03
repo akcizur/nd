@@ -71,7 +71,6 @@ export class PlayerController {
     const targetRate = magnitude > 0.001
       ? (this.grounded ? this.acceleration : this.acceleration * this.airControl)
       : (this.grounded ? this.deceleration : this.deceleration * this.airControl);
-    const maxDelta = targetRate * dt;
     this.horizontalVelocity.x = THREE.MathUtils.damp(
       this.horizontalVelocity.x, targetVelocity.x, targetRate, dt
     );
