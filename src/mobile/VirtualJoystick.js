@@ -13,7 +13,6 @@ export class VirtualJoystick {
     this.el = document.createElement('div');
     this.el.className = className;
     this.el.style.setProperty('--joystick-radius', `${radius}px`);
-
     this.ring = document.createElement('div');
     this.ring.className = 'virtual-joystick__ring';
     this.knob = document.createElement('div');
@@ -39,9 +38,8 @@ export class VirtualJoystick {
 
   start(event) {
     if (this.activeTouch !== null) return;
-    const touch = Array.from(event.changedTouches).find(() => true);
+    const touch = event.changedTouches[0];
     if (!touch) return;
-
     event.preventDefault();
     this.activeTouch = touch.identifier;
     this.center.set(touch.clientX, touch.clientY);
@@ -55,7 +53,6 @@ export class VirtualJoystick {
     if (this.activeTouch === null) return;
     const touch = Array.from(event.touches).find(item => item.identifier === this.activeTouch);
     if (!touch) return;
-
     event.preventDefault();
     this.update(touch.clientX, touch.clientY);
   }
@@ -64,7 +61,6 @@ export class VirtualJoystick {
     if (this.activeTouch === null) return;
     const touch = Array.from(event.changedTouches).find(item => item.identifier === this.activeTouch);
     if (!touch) return;
-
     event.preventDefault();
     this.activeTouch = null;
     this.value.set(0, 0);
@@ -81,7 +77,6 @@ export class VirtualJoystick {
     const scale = distance > max ? max / distance : 1;
     const nx = (dx * scale) / max;
     const ny = (dy * scale) / max;
-
     const magnitude = Math.hypot(nx, ny);
 
     if (magnitude < this.deadzone) {
@@ -92,9 +87,7 @@ export class VirtualJoystick {
       this.value.set(nx * factor, -ny * factor);
     }
 
-    this.knob.style.transform =
-      `translate(calc(-50% + ${nx * max}px), calc(-50% + ${ny * max}px))`;
-
+    this.knob.style.transform = `translate(calc(-50% + ${nx * max}px), calc(-50% + ${ny * max}px))`;
     this.onChange?.(this.value.x, this.value.y);
   }
 }
