@@ -9,6 +9,12 @@ import { MobileControls } from './mobile/MobileControls.js';
 import { MainMenu } from './ui/MainMenu.js';
 import { GameMenu } from './ui/GameMenu.js';
 import { SettingsMenu } from './ui/SettingsMenu.js';
+import { PlayerController } from './player/PlayerController.js';
+import { VehicleController } from './vehicle/VehicleController.js';
+import { CameraSystem } from './camera/CameraSystem.js';
+import { AnimationSystem } from './animation/AnimationSystem.js';
+import { CheckpointSystem } from './game/CheckpointSystem.js';
+import { PhysicsWorld } from './physics/PhysicsWorld.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd7f5);
@@ -124,6 +130,12 @@ let player = null;
 let playerMixer = null;
 const playerActions = {};
 let playerState = 'Idle';
+let playerAnimation = null;
+let playerController = null;
+let vehicleController = null;
+let cameraSystem = null;
+let checkpoints = null;
+let physicsWorld = null;
 let inVehicle = false;
 let interactLocked = false;
 let gameplay = null;
@@ -141,6 +153,8 @@ async function loadPlayer() {
   });
   world.add(player);
   playerMixer = new THREE.AnimationMixer(player);
+  playerAnimation = new AnimationSystem(player);
+  playerAnimation.bind(playerMixer, gltf.animations);
   for (const clip of gltf.animations) {
     if (['Idle', 'Walk', 'Run'].includes(clip.name)) {
       playerActions[clip.name] = playerMixer.clipAction(clip);
@@ -259,6 +273,9 @@ function closeSettings() {
 
 function enterPlay() {
   if (!player || !car) return;
+  cameraSystem ||= new CameraSystem(camera);
+  playerController ||= new PlayerController({ object: player, input: input.input, collisionTest: blocked, camera: cameraSystem });
+  vehicleController ||= new VehicleController({ object: car, wheels, input: input.input, collisionTest: blocked });
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
   settingsMenu.hide();
@@ -277,6 +294,8 @@ function resumeGame() {
 
 function restartGame() {
   if (!player) return;
+  cameraSystem && (cameraSystem.yaw = 0, cameraSystem.pitch = .28);
+  vehicleController && (vehicleController.speed = 0);
   player.position.set(0, 0, 1);
   player.rotation.set(0, 0, 0);
   player.visible = true;
@@ -341,6 +360,7 @@ function enterVehicle() {
   hudObjective.textContent = 'Vehicle · řízení aktivní';
   hudHint.textContent = 'WASD / šipky · E = vystoupit';
   document.body.classList.add('vehicle-mode');
+  mobileControls.setVehicleMode(true);
   setTimeout(() => { interactLocked = false; }, 180);
 }
 
@@ -361,59 +381,32 @@ function exitVehicle() {
   hudObjective.textContent = 'Player ready · Chůze / běh';
   hudHint.textContent = 'WASD / šipky · Shift = běh · E = nastoupit';
   document.body.classList.remove('vehicle-mode');
+  mobileControls.setVehicleMode(false);
   setTimeout(() => { interactLocked = false; }, 180);
 }
 
 function updatePlayer(dt) {
-  if (!player || inVehicle) return;
-
-  const moveInput = input.move;
-  const moving = moveInput.lengthSq() > 0;
-  const speed = input.run ? 6.2 : 3.8;
-  const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
-  const right = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
-  const move = forward.multiplyScalar(moveInput.y).add(right.multiplyScalar(moveInput.x));
-  const next = player.position.clone().addScaledVector(move, speed * dt);
-
-  if (!blocked(next)) player.position.copy(next);
-
-  if (moving) {
-    const targetAngle = Math.atan2(move.x, -move.z);
-    player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, targetAngle, 0.24);
-  }
-
-  playPlayerAnimation(moving ? (speed > 5 ? 'Run' : 'Walk') : 'Idle');
-  hudSpeed.textContent = moving
-    ? (speed > 5 ? 'Běh' : 'Chůze') + ' · ' + Math.round(speed * 10) / 10 + ' m/s'
-    : 'Stojí · Idle';
+  if (!player || inVehicle || !playerController) return;
+  playerController.update(dt);
+  const state = playerController.state;
+  const animationMap = { idle:'idle', walk:'walk', run:'run', sprint:'run', crouch:'walk', jump:'run', fall:'run' };
+  playerAnimation?.play(animationMap[state] || 'idle');
+  hudSpeed.textContent = state.toUpperCase() + ' · ' + Math.round((playerController.input.move.length()) * (state === 'sprint' ? 8 : state === 'run' ? 6.2 : 3.8) * 10) / 10 + ' m/s';
 }
 
 function updateVehicle(dt) {
-  if (!inVehicle) return;
-  const vehicleInput = input.move;
-  const throttle = THREE.MathUtils.clamp(vehicleInput.y, -1, 1);
-  const steering = THREE.MathUtils.clamp(vehicleInput.x, -1, 1);
-
-  const maxSpeed = 13;
-  const targetSpeed = throttle * maxSpeed;
-  const current = car.userData.speed ?? 0;
-  car.userData.speed = THREE.MathUtils.damp(current, targetSpeed, throttle ? 3.5 : 2.2, dt);
-
-  const steerStrength = Math.min(Math.abs(car.userData.speed) / maxSpeed, 1) * 1.8;
-  // Three.js +Y rotation turns the -Z forward vector toward -X.
-  // Therefore positive steering input (D/right) must rotate the car toward +X/right.
-  car.rotation.y -= steering * steerStrength * dt * (car.userData.speed >= 0 ? 1 : -1);
-
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
-  const next = car.position.clone().addScaledVector(forward, car.userData.speed * dt);
-  if (!blocked(next, 0.92, 1.6)) {
-    car.position.copy(next);
-  } else {
-    car.userData.speed *= -0.15;
+  if (!inVehicle || !vehicleController) return;
+  vehicleController.update(dt);
+  car.userData.speed = vehicleController.speed;
+  carBody.rotation.z = vehicleController.bodyRoll;
+  carBody.rotation.x = vehicleController.bodyPitch;
+  cabin.rotation.z = vehicleController.bodyRoll * .8;
+  cabin.rotation.x = vehicleController.bodyPitch * .7;
+  for (const wheel of wheels) {
+    wheel.rotation.x = wheel.userData.lastSpin ?? wheel.rotation.x;
+    wheel.rotation.y = wheel.userData.steer ?? 0;
   }
-
-  for (const wheel of wheels) wheel.rotation.x -= car.userData.speed * dt * 1.8;
-  hudSpeed.textContent = 'Auto · ' + Math.round(Math.abs(car.userData.speed) * 3.6) + ' km/h';
+  hudSpeed.textContent = 'AUTO · ' + Math.round(Math.abs(vehicleController.speed) * 3.6) + ' KM/H';
 }
 
 function updateNpcs(dt) {
@@ -424,35 +417,14 @@ function updateNpcs(dt) {
 }
 
 function updateCamera(dt) {
-  if (!player) return;
-  const subject = inVehicle ? car : player;
-  const cameraInput = input.cameraInput;
-  const cameraActive = cameraInput.lengthSq() > 0.001;
-
-  if (cameraActive) {
-    const sensitivity = settingsMenu.sensitivity * 1.8;
-    cameraYaw += cameraInput.x * sensitivity * dt * 3.2;
-    const pitchDirection = settingsMenu.invertY ? -1 : 1;
-    cameraPitch = THREE.MathUtils.clamp(cameraPitch + cameraInput.y * sensitivity * dt * 2.1 * pitchDirection, -0.15, 0.82);
-  } else if (input.move.lengthSq() > 0.01) {
-    const targetYaw = subject.rotation.y + Math.PI;
-    const delta = THREE.MathUtils.euclideanModulo(targetYaw - cameraYaw + Math.PI, Math.PI * 2) - Math.PI;
-    cameraYaw += delta * Math.min(1, dt * 2.2);
-  }
-
-  const distance = inVehicle ? 8.2 : 6.5;
-  const height = inVehicle ? 3.1 : 2.7;
-  const horizontal = Math.cos(cameraPitch) * distance;
-  const desired = new THREE.Vector3(
-    subject.position.x + Math.sin(cameraYaw) * horizontal,
-    subject.position.y + height + Math.sin(cameraPitch) * distance,
-    subject.position.z + Math.cos(cameraYaw) * horizontal
-  );
-  camera.position.lerp(desired, 0.1);
-
-  const target = subject.position.clone();
-  target.y += inVehicle ? 1.0 : 1.1;
-  camera.lookAt(target);
+  if (!cameraSystem) return;
+  cameraSystem.update(dt, {
+    subject: inVehicle ? car : player,
+    vehicle: inVehicle,
+    input: input.input,
+    speed: inVehicle ? vehicleController?.speed || 0 : 0,
+    collisionTest: blocked,
+  });
 }
 
 function updateInteractionHud() {
@@ -474,7 +446,17 @@ function updateInteractionHud() {
 const clock = new THREE.Clock();
 async function start() {
   hudObjective.textContent = 'Loading city…';
+  physicsWorld = await PhysicsWorld.create();
+  for (const box of collisionBoxes) {
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    physicsWorld.addStaticBox(center.x, center.y, center.z, size.x, size.y, size.z);
+  }
   await loadCharacters();
+  cameraSystem = new CameraSystem(camera);
+  playerController = new PlayerController({ object: player, input: input.input, collisionTest: blocked, camera: cameraSystem });
+  vehicleController = new VehicleController({ object: car, wheels, input: input.input, collisionTest: blocked });
+  checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
   hudObjective.textContent = 'Ready · PLAY';
   mainMenu.show();
@@ -484,12 +466,16 @@ async function start() {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
+  input.update();
   if (gameState.current === GameState.PLAYING) {
-    playerMixer?.update(dt);
+    physicsWorld?.step();
+    playerAnimation?.update(dt);
     updatePlayer(dt);
     updateVehicle(dt);
     updateNpcs(dt);
     updateInteractionHud();
+    const missionPosition = inVehicle ? car.position : player.position;
+    if (checkpoints?.update(missionPosition)) hudObjective.textContent = 'MISSION COMPLETE · FREE ROAM';
     updateCamera(dt);
   }
   renderer.render(scene, camera);
