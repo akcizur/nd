@@ -19,7 +19,6 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.querySelector('#app').appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xdff4ff, 0x304030, 1.9));
-
 const sun = new THREE.DirectionalLight(0xffffff, 2.4);
 sun.position.set(50, 90, 30);
 sun.castShadow = true;
@@ -28,7 +27,6 @@ scene.add(sun);
 
 const world = new THREE.Group();
 scene.add(world);
-
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(320, 320),
   new THREE.MeshStandardMaterial({ color: 0x586158, roughness: 0.96 })
@@ -38,7 +36,6 @@ floor.receiveShadow = true;
 world.add(floor);
 
 const collisionBoxes = [];
-
 function box(x, y, z, w, h, d, color, collision = false) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
@@ -48,7 +45,6 @@ function box(x, y, z, w, h, d, color, collision = false) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   world.add(mesh);
-
   if (collision) {
     collisionBoxes.push(new THREE.Box3(
       new THREE.Vector3(x - w / 2, y - h / 2, z - d / 2),
@@ -67,7 +63,6 @@ const buildingColors = [0x686868, 0x777777, 0x555555, 0x858585];
 for (let x = -96; x <= 96; x += 24) {
   for (let z = -96; z <= 96; z += 24) {
     if (Math.abs(x) < 15 || Math.abs(z) < 15) continue;
-
     const seed = Math.abs((x * 17 + z * 31) | 0);
     const w = 13 + (seed % 5);
     const d = 13 + ((seed >> 3) % 5);
@@ -76,7 +71,7 @@ for (let x = -96; x <= 96; x += 24) {
   }
 }
 
-// Parked starter vehicle: the next interaction step can bind E/touch to enter it.
+// Starter vehicle. E enters/exits when the player is nearby.
 const car = new THREE.Group();
 const carBody = new THREE.Mesh(
   new THREE.BoxGeometry(1.8, 0.55, 3.6),
@@ -85,7 +80,6 @@ const carBody = new THREE.Mesh(
 carBody.position.y = 0.65;
 carBody.castShadow = true;
 car.add(carBody);
-
 const cabin = new THREE.Mesh(
   new THREE.BoxGeometry(1.45, 0.55, 1.65),
   new THREE.MeshStandardMaterial({ color: 0x20252a, roughness: 0.32 })
@@ -94,6 +88,7 @@ cabin.position.set(0, 1.08, -0.15);
 cabin.castShadow = true;
 car.add(cabin);
 
+const wheels = [];
 for (const x of [-0.82, 0.82]) {
   for (const z of [-1.15, 1.15]) {
     const wheel = new THREE.Mesh(
@@ -104,6 +99,7 @@ for (const x of [-0.82, 0.82]) {
     wheel.position.set(x, 0.4, z);
     wheel.castShadow = true;
     car.add(wheel);
+    wheels.push(wheel);
   }
 }
 car.position.set(0, 0, 5);
@@ -121,6 +117,8 @@ let player = null;
 let playerMixer = null;
 const playerActions = {};
 let playerState = 'Idle';
+let inVehicle = false;
+let interactLocked = false;
 
 async function loadPlayer() {
   const gltf = await loader.loadAsync(SOLDIER_URL);
@@ -134,14 +132,12 @@ async function loadPlayer() {
     }
   });
   world.add(player);
-
   playerMixer = new THREE.AnimationMixer(player);
   for (const clip of gltf.animations) {
     if (['Idle', 'Walk', 'Run'].includes(clip.name)) {
       playerActions[clip.name] = playerMixer.clipAction(clip);
     }
   }
-
   playPlayerAnimation('Idle');
 }
 
@@ -149,14 +145,12 @@ function playPlayerAnimation(name) {
   if (!playerMixer || !playerActions[name] || playerState === name) return;
   const next = playerActions[name];
   const current = playerActions[playerState];
-
   if (current) current.fadeOut(0.18);
   next.reset().fadeIn(0.18).play();
   playerState = name;
 }
 
 const npcs = [];
-
 async function loadNpc(url, position) {
   try {
     const gltf = await loader.loadAsync(url);
@@ -170,7 +164,6 @@ async function loadNpc(url, position) {
       }
     });
     world.add(model);
-
     const mixer = new THREE.AnimationMixer(model);
     const master = gltf.animations[0];
     if (master) {
@@ -200,6 +193,7 @@ addEventListener('keydown', event => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
     event.preventDefault();
   }
+  if (event.code === 'KeyE' && !event.repeat) toggleVehicle();
 });
 
 addEventListener('keyup', event => { keys[event.code] = false; });
@@ -210,10 +204,13 @@ document.querySelectorAll('[data-control]').forEach(button => {
     touchState[control] = value;
     button.classList.toggle('active', value);
   };
-
   button.addEventListener('pointerdown', event => {
     event.preventDefault();
     button.setPointerCapture?.(event.pointerId);
+    if (control === 'interact') {
+      toggleVehicle();
+      return;
+    }
     set(true);
   });
   button.addEventListener('pointerup', () => set(false));
@@ -223,25 +220,71 @@ document.querySelectorAll('[data-control]').forEach(button => {
 
 const hudObjective = document.querySelector('#objective');
 const hudSpeed = document.querySelector('#speed');
+const hudHint = document.querySelector('#hint');
 
-function blocked(position) {
+function blocked(position, radius = 0.42, height = 1.9) {
   const playerBox = new THREE.Box3(
-    new THREE.Vector3(position.x - 0.42, 0, position.z - 0.42),
-    new THREE.Vector3(position.x + 0.42, 1.9, position.z + 0.42)
+    new THREE.Vector3(position.x - radius, 0, position.z - radius),
+    new THREE.Vector3(position.x + radius, height, position.z + radius)
   );
-  return collisionBoxes.some(box => playerBox.intersectsBox(box));
+  return collisionBoxes.some(item => playerBox.intersectsBox(item));
+}
+
+function nearCar() {
+  if (!player || inVehicle) return false;
+  const dx = player.position.x - car.position.x;
+  const dz = player.position.z - car.position.z;
+  return Math.hypot(dx, dz) < 4.4;
+}
+
+function toggleVehicle() {
+  if (!player || interactLocked) return;
+  if (inVehicle) {
+    exitVehicle();
+  } else if (nearCar()) {
+    enterVehicle();
+  }
+}
+
+function enterVehicle() {
+  interactLocked = true;
+  inVehicle = true;
+  player.visible = false;
+  player.position.copy(car.position);
+  car.userData.speed = 0;
+  hudObjective.textContent = 'Vehicle · řízení aktivní';
+  hudHint.textContent = 'WASD / šipky · E = vystoupit';
+  document.body.classList.add('vehicle-mode');
+  setTimeout(() => { interactLocked = false; }, 180);
+}
+
+function exitVehicle() {
+  interactLocked = true;
+  const side = new THREE.Vector3(2.1, 0, 0).applyQuaternion(car.quaternion);
+  const exitPosition = car.position.clone().add(side);
+  if (blocked(exitPosition, 0.4, 1.9)) {
+    side.multiplyScalar(-1);
+    exitPosition.copy(car.position).add(side);
+  }
+  player.position.copy(exitPosition);
+  player.rotation.y = car.rotation.y;
+  player.visible = true;
+  inVehicle = false;
+  car.userData.speed = 0;
+  hudObjective.textContent = 'Player ready · Chůze / běh';
+  hudHint.textContent = 'WASD / šipky · Shift = běh · E = nastoupit';
+  document.body.classList.remove('vehicle-mode');
+  setTimeout(() => { interactLocked = false; }, 180);
 }
 
 function updatePlayer(dt) {
-  if (!player) return;
-
+  if (!player || inVehicle) return;
   const x =
     (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0) -
     (keys.KeyA || keys.ArrowLeft || touchState.left ? 1 : 0);
   const z =
     (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0) -
     (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0);
-
   const input = new THREE.Vector2(x, z);
   const moving = input.lengthSq() > 0;
   if (moving) input.normalize();
@@ -249,7 +292,6 @@ function updatePlayer(dt) {
   const speed = keys.ShiftLeft || keys.ShiftRight ? 6.2 : 3.8;
   const move = new THREE.Vector3(input.x, 0, input.y);
   const next = player.position.clone().addScaledVector(move, speed * dt);
-
   if (!blocked(next)) player.position.copy(next);
 
   if (moving) {
@@ -258,7 +300,36 @@ function updatePlayer(dt) {
   }
 
   playPlayerAnimation(moving ? (speed > 5 ? 'Run' : 'Walk') : 'Idle');
-  hudSpeed.textContent = moving ? (speed > 5 ? 'Běh' : 'Chůze') + ' · ' + Math.round(speed * 10) / 10 + ' m/s' : 'Stojí · Idle';
+  hudSpeed.textContent = moving
+    ? (speed > 5 ? 'Běh' : 'Chůze') + ' · ' + Math.round(speed * 10) / 10 + ' m/s'
+    : 'Stojí · Idle';
+}
+
+function updateVehicle(dt) {
+  if (!inVehicle) return;
+  const throttle = (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0) -
+    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0);
+  const steering = (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0) -
+    (keys.KeyA || keys.ArrowLeft || touchState.left ? 1 : 0);
+
+  const maxSpeed = 13;
+  const targetSpeed = throttle * maxSpeed;
+  const current = car.userData.speed ?? 0;
+  car.userData.speed = THREE.MathUtils.damp(current, targetSpeed, throttle ? 3.5 : 2.2, dt);
+
+  const steerStrength = Math.min(Math.abs(car.userData.speed) / maxSpeed, 1) * 1.8;
+  car.rotation.y += steering * steerStrength * dt * (car.userData.speed >= 0 ? 1 : -1);
+
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
+  const next = car.position.clone().addScaledVector(forward, car.userData.speed * dt);
+  if (!blocked(next, 0.92, 1.6)) {
+    car.position.copy(next);
+  } else {
+    car.userData.speed *= -0.15;
+  }
+
+  for (const wheel of wheels) wheel.rotation.x -= car.userData.speed * dt * 1.8;
+  hudSpeed.textContent = 'Auto · ' + Math.round(Math.abs(car.userData.speed) * 3.6) + ' km/h';
 }
 
 function updateNpcs(dt) {
@@ -270,38 +341,47 @@ function updateNpcs(dt) {
 
 function updateCamera() {
   if (!player) return;
-
-  const desired = new THREE.Vector3(0, 3.6, 6.5)
-    .applyQuaternion(player.quaternion)
-    .add(player.position);
-
+  const subject = inVehicle ? car : player;
+  const distance = inVehicle ? 8.2 : 6.5;
+  const height = inVehicle ? 4.3 : 3.6;
+  const desired = new THREE.Vector3(0, height, distance)
+    .applyQuaternion(subject.quaternion)
+    .add(subject.position);
   camera.position.lerp(desired, 0.1);
-
-  const target = new THREE.Vector3(0, 1.1, 0)
-    .applyQuaternion(player.quaternion)
-    .add(player.position);
-
+  const target = new THREE.Vector3(0, inVehicle ? 1.0 : 1.1, 0)
+    .applyQuaternion(subject.quaternion)
+    .add(subject.position);
   camera.lookAt(target);
 }
 
-const clock = new THREE.Clock();
+function updateInteractionHud() {
+  if (inVehicle) return;
+  if (nearCar()) {
+    hudObjective.textContent = 'E · nastoupit do auta';
+    hudHint.textContent = 'E / dotykové tlačítko · nastoupit';
+  } else {
+    hudObjective.textContent = 'Volný pohyb městem';
+    hudHint.textContent = 'WASD / šipky · Shift = běh · přibliž se k autu';
+  }
+}
 
+const clock = new THREE.Clock();
 async function start() {
   hudObjective.textContent = 'Načítám character pack…';
   await loadCharacters();
-  hudObjective.textContent = 'Player ready · Chůze / běh';
+  hudObjective.textContent = 'Volný pohyb městem';
   animate();
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-
   playerMixer?.update(dt);
   updatePlayer(dt);
+  updateVehicle(dt);
   updateNpcs(dt);
+  updateInteractionHud();
   updateCamera();
-
   renderer.render(scene, camera);
 }
 
@@ -316,4 +396,3 @@ start().catch(error => {
   console.error(error);
   hudObjective.textContent = 'Character se nepodařilo načíst';
 });
-
