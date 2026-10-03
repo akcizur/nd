@@ -70,7 +70,7 @@ export class PhysicsWorld {
   createVehicle(object) {
     const body = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(object.position.x, object.position.y + 0.72, object.position.z)
+        .setTranslation(object.position.x, object.position.y + 0.65, object.position.z)
         .setGravityScale(1)
         .setLinearDamping(0.55)
         .setAngularDamping(3.2)
@@ -78,13 +78,13 @@ export class PhysicsWorld {
         .setCanSleep(false)
     );
     const collider = this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(0.92, 0.36, 1.82)
+      RAPIER.ColliderDesc.cuboid(0.92, 0.65, 1.82)
         .setDensity(650)
         .setFriction(1.1)
         .setRestitution(0.05),
       body
     );
-    return { body, collider, bodyOffsetY: 0.72 };
+    return { body, collider, bodyOffsetY: 0.65 };
   }
 
   setVehicleState(vehicle, { velocity, yaw }) {
