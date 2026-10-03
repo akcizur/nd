@@ -10,6 +10,7 @@ export class VirtualJoystick {
     this.value = new THREE.Vector2();
     this.el = document.createElement('div');
     this.el.className = className;
+    this.el.style.setProperty('--joystick-radius', `${radius}px`);
     this.ring = document.createElement('div');
     this.ring.className = 'virtual-joystick__ring';
     this.knob = document.createElement('div');
