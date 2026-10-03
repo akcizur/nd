@@ -282,6 +282,11 @@ const gameMenu = new GameMenu({
   onMainMenu: () => returnToMainMenu(),
 });
 const cameraSettings = { sensitivity: 1, invertX: false, invertY: false };
+const movementSettings = {
+  sprintMode: input.controlSettings.sprintMode,
+  cameraRelativeMovement: input.controlSettings.cameraRelativeMovement,
+  touchDeadzone: input.controlSettings.touchDeadzone,
+};
 const applyCameraSettings = () => {
   if (!cameraSystem) return;
   cameraSystem.sensitivityX = 1.8 * cameraSettings.sensitivity;
@@ -289,12 +294,21 @@ const applyCameraSettings = () => {
   cameraSystem.invertX = cameraSettings.invertX;
   cameraSystem.invertY = cameraSettings.invertY;
 };
+const applyMovementSettings = settings => {
+  Object.assign(movementSettings, settings);
+  input.setControlSettings(movementSettings);
+  mobileControls.setTouchDeadzone(movementSettings.touchDeadzone);
+  playerController?.setMovementSettings(movementSettings);
+};
 const settingsMenu = new SettingsMenu({
   onBack: () => closeSettings(),
   inputRouter: input,
   onCameraSettings: settings => {
     Object.assign(cameraSettings, settings);
     applyCameraSettings();
+  },
+  onMovementSettings: settings => {
+    applyMovementSettings(settings);
   },
 });
 
@@ -370,7 +384,7 @@ function restartGame() {
   vehicleController && (vehicleController.speed = 0);
   physicsWorld?.setCharacterEnabled(playerPhysics, true);
   physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
-  playerController && (playerController.velocityY = 0, playerController.grounded = true);
+  playerController && (playerController.grounded = true, playerController.resetMovement());
   physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
   vehicleController && (vehicleController.speed = 0, vehicleController.yaw = 0);
   checkpoints?.reset();
@@ -545,7 +559,14 @@ async function start() {
   }
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
-  playerController = new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
+  playerController = new PlayerController({
+  object: player,
+  input: input.input,
+  camera: cameraSystem,
+  physics: physicsWorld,
+  movementSettings,
+});
+
   vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   playerPhysics = physicsWorld.createCharacter(player);
   vehiclePhysics = physicsWorld.createVehicle(car);
