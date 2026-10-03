@@ -38,10 +38,11 @@ export class DebugOverlay {
       `FRAME     ${(dt * 1000).toFixed(1)} ms`,
       `STATE     ${gameState}`,
       `VEHICLE   ${inVehicle ? 'YES' : 'NO'}`,
+      `PHYSICS   ${physics?.lastSteps ?? 0} step/frame · #${physics?.stepCount ?? 0}`,
       playerBody ? `PLAYER    ${this._vec(playerBody)}` : 'PLAYER    -',
       vehicleBody ? `CAR       ${this._vec(vehicleBody)}` : 'CAR       -',
       `CAR SPEED ${vehicle?.body?.linvel ? this._speed(vehicle.body.linvel()) : 0} m/s`,
-      `CONTACTS  ${physics?.world?.contactPair ? 'Rapier' : 'ready'}`,
+      `ACCUM     ${(physics?.accumulator ?? 0).toFixed(4)} s`,
     ].join('\\n');
   }
 
