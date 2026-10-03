@@ -459,10 +459,11 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   input.update();
   if (gameState.current === GameState.PLAYING) {
-    updatePlayer(dt);
-    updateVehicle(dt);
-    physicsWorld?.step();
-    if (!inVehicle) physicsWorld?.syncObject(player, playerPhysics);
+    physicsWorld?.step(dt, fixedDt => {
+      updatePlayer(fixedDt);
+      updateVehicle(fixedDt);
+    });
+    physicsWorld?.syncObject(player, playerPhysics);
     vehicleController?.syncFromPhysics();
     playerAnimation?.update(dt);
     updateNpcs(dt);
