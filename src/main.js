@@ -271,6 +271,7 @@ function closeSettings() {
 
 function enterPlay() {
   if (!player || !car) return;
+  if (!inVehicle) physicsWorld?.setCharacterEnabled(playerPhysics, true);
   cameraSystem ||= new CameraSystem(camera);
   playerController ||= new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
   vehicleController ||= new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
@@ -309,6 +310,16 @@ function restartGame() {
 }
 
 function returnToMainMenu() {
+  if (inVehicle) {
+    inVehicle = false;
+    player.visible = true;
+    physicsWorld?.setCharacterEnabled(playerPhysics, true);
+    physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
+    physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
+    vehicleController && (vehicleController.speed = 0, vehicleController.yaw = 0);
+    document.body.classList.remove('vehicle-mode');
+    mobileControls.setVehicleMode(false);
+  }
   gameMenu.close();
   gameMenu.button.classList.add('hidden');
   mobileControls.root.classList.add('hidden');
