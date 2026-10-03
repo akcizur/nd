@@ -1,24 +1,27 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 55, 190);
+scene.background = new THREE.Color(0x9fd7f5);
+scene.fog = new THREE.Fog(0x9fd7f5, 70, 240);
 
-const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 500);
-camera.position.set(8, 6, 10);
+const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 600);
+camera.position.set(0, 4, 7);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.querySelector('#app').appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xbfe8ff, 0x303030, 1.8));
+scene.add(new THREE.HemisphereLight(0xdff4ff, 0x304030, 1.9));
 
-const sun = new THREE.DirectionalLight(0xffffff, 2);
-sun.position.set(40, 70, 25);
+const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+sun.position.set(50, 90, 30);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 scene.add(sun);
@@ -27,76 +30,70 @@ const world = new THREE.Group();
 scene.add(world);
 
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(240, 240),
-  new THREE.MeshStandardMaterial({ color: 0x242424, roughness: 0.95 })
+  new THREE.PlaneGeometry(320, 320),
+  new THREE.MeshStandardMaterial({ color: 0x586158, roughness: 0.96 })
 );
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 world.add(floor);
 
-const buildings = [];
+const collisionBoxes = [];
 
-function box(x, y, z, w, h, d, color, isBuilding = false) {
+function box(x, y, z, w, h, d, color, collision = false) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.85 })
+    new THREE.MeshStandardMaterial({ color, roughness: 0.86 })
   );
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   world.add(mesh);
 
-  if (isBuilding) {
-    buildings.push({ mesh, halfX: w / 2, halfZ: d / 2 });
+  if (collision) {
+    collisionBoxes.push(new THREE.Box3(
+      new THREE.Vector3(x - w / 2, y - h / 2, z - d / 2),
+      new THREE.Vector3(x + w / 2, y + h / 2, z + d / 2)
+    ));
   }
   return mesh;
 }
 
-function road(x, z, w, d) {
-  return box(x, 0.025, z, w, 0.05, d, 0x171717);
+for (let i = -120; i <= 120; i += 24) {
+  box(0, 0.025, i, 240, 0.05, 9, 0x202020);
+  box(i, 0.026, 0, 9, 0.052, 240, 0x202020);
 }
 
-road(0, 0, 240, 12);
-road(0, 0, 12, 240);
-road(0, 36, 240, 8);
-road(0, -36, 240, 8);
-road(36, 0, 8, 240);
-road(-36, 0, 8, 240);
-
 const buildingColors = [0x686868, 0x777777, 0x555555, 0x858585];
+for (let x = -96; x <= 96; x += 24) {
+  for (let z = -96; z <= 96; z += 24) {
+    if (Math.abs(x) < 15 || Math.abs(z) < 15) continue;
 
-for (let x = -84; x <= 84; x += 24) {
-  for (let z = -84; z <= 84; z += 24) {
-    const onMainRoad = Math.abs(x) < 15 || Math.abs(z) < 15;
-    const onCrossRoad = Math.abs(x) === 36 || Math.abs(z) === 36;
-    if (onMainRoad || (onCrossRoad && (Math.abs(x) === 36 || Math.abs(z) === 36))) continue;
-
-    const w = 14 + ((Math.abs(x + z) * 3) % 5);
-    const d = 14 + ((Math.abs(x - z) * 2) % 5);
-    const h = 5 + ((Math.abs(x * 7 + z * 3)) % 16);
-    const color = buildingColors[Math.abs((x + z) / 24) % buildingColors.length];
-    box(x, h / 2, z, w, h, d, color, true);
+    const seed = Math.abs((x * 17 + z * 31) | 0);
+    const w = 13 + (seed % 5);
+    const d = 13 + ((seed >> 3) % 5);
+    const h = 6 + (seed % 15);
+    box(x, h / 2, z, w, h, d, buildingColors[seed % buildingColors.length], true);
   }
 }
 
+// Parked starter vehicle: the next interaction step can bind E/touch to enter it.
 const car = new THREE.Group();
-const body = new THREE.Mesh(
+const carBody = new THREE.Mesh(
   new THREE.BoxGeometry(1.8, 0.55, 3.6),
-  new THREE.MeshStandardMaterial({ color: 0xdedede, metalness: 0.15, roughness: 0.5 })
+  new THREE.MeshStandardMaterial({ color: 0xe2e2e2, metalness: 0.15, roughness: 0.5 })
 );
-body.position.y = 0.65;
-body.castShadow = true;
-car.add(body);
+carBody.position.y = 0.65;
+carBody.castShadow = true;
+car.add(carBody);
 
 const cabin = new THREE.Mesh(
   new THREE.BoxGeometry(1.45, 0.55, 1.65),
-  new THREE.MeshStandardMaterial({ color: 0x20252a, metalness: 0.1, roughness: 0.35 })
+  new THREE.MeshStandardMaterial({ color: 0x20252a, roughness: 0.32 })
 );
 cabin.position.set(0, 1.08, -0.15);
 cabin.castShadow = true;
 car.add(cabin);
 
-const wheels = [];
 for (const x of [-0.82, 0.82]) {
   for (const z of [-1.15, 1.15]) {
     const wheel = new THREE.Mesh(
@@ -106,13 +103,94 @@ for (const x of [-0.82, 0.82]) {
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(x, 0.4, z);
     wheel.castShadow = true;
-    wheels.push(wheel);
     car.add(wheel);
   }
 }
-
 car.position.set(0, 0, 5);
 world.add(car);
+
+const loader = new GLTFLoader();
+const SOLDIER_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Soldier.glb';
+const GOBKIT_URLS = [
+  'https://gobkit.com/freebies/minion/minion-a01.glb',
+  'https://gobkit.com/freebies/minion/minion-b01.glb',
+  'https://gobkit.com/freebies/minion/minion-c01.glb'
+];
+
+let player = null;
+let playerMixer = null;
+const playerActions = {};
+let playerState = 'Idle';
+
+async function loadPlayer() {
+  const gltf = await loader.loadAsync(SOLDIER_URL);
+  player = gltf.scene;
+  player.scale.setScalar(1.05);
+  player.position.set(0, 0, 1);
+  player.traverse(node => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+  world.add(player);
+
+  playerMixer = new THREE.AnimationMixer(player);
+  for (const clip of gltf.animations) {
+    if (['Idle', 'Walk', 'Run'].includes(clip.name)) {
+      playerActions[clip.name] = playerMixer.clipAction(clip);
+    }
+  }
+
+  playPlayerAnimation('Idle');
+}
+
+function playPlayerAnimation(name) {
+  if (!playerMixer || !playerActions[name] || playerState === name) return;
+  const next = playerActions[name];
+  const current = playerActions[playerState];
+
+  if (current) current.fadeOut(0.18);
+  next.reset().fadeIn(0.18).play();
+  playerState = name;
+}
+
+const npcs = [];
+
+async function loadNpc(url, position) {
+  try {
+    const gltf = await loader.loadAsync(url);
+    const model = SkeletonUtils.clone(gltf.scene);
+    model.position.copy(position);
+    model.scale.setScalar(1.1);
+    model.traverse(node => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    world.add(model);
+
+    const mixer = new THREE.AnimationMixer(model);
+    const master = gltf.animations[0];
+    if (master) {
+      const idle = THREE.AnimationUtils.subclip(master, 'Idle', 0, 29, 24);
+      mixer.clipAction(idle).play();
+    }
+    npcs.push({ model, mixer, phase: Math.random() * Math.PI * 2 });
+  } catch (error) {
+    console.warn('NPC asset failed:', error);
+  }
+}
+
+async function loadCharacters() {
+  await loadPlayer();
+  await Promise.all(
+    GOBKIT_URLS.map((url, index) =>
+      loadNpc(url, new THREE.Vector3((index - 1) * 5, 0, -8 - index * 3))
+    )
+  );
+}
 
 const keys = Object.create(null);
 const touchState = { accelerate: false, reverse: false, left: false, right: false };
@@ -143,78 +221,87 @@ document.querySelectorAll('[data-control]').forEach(button => {
   button.addEventListener('pointerleave', () => set(false));
 });
 
-const clock = new THREE.Clock();
-const velocity = new THREE.Vector3();
-const previousPosition = new THREE.Vector3();
-const carBounds = { x: 1.0, z: 2.0 };
+const hudObjective = document.querySelector('#objective');
+const hudSpeed = document.querySelector('#speed');
 
-function isBlocked(position) {
-  for (const building of buildings) {
-    const dx = Math.abs(position.x - building.mesh.position.x);
-    const dz = Math.abs(position.z - building.mesh.position.z);
-    if (dx < building.halfX + carBounds.x && dz < building.halfZ + carBounds.z) {
-      return true;
-    }
-  }
-  return false;
+function blocked(position) {
+  const playerBox = new THREE.Box3(
+    new THREE.Vector3(position.x - 0.42, 0, position.z - 0.42),
+    new THREE.Vector3(position.x + 0.42, 1.9, position.z + 0.42)
+  );
+  return collisionBoxes.some(box => playerBox.intersectsBox(box));
 }
 
-function updateCar(dt) {
-  const throttle =
-    (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0) -
-    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0);
+function updatePlayer(dt) {
+  if (!player) return;
 
-  const steer =
-    (keys.KeyA || keys.ArrowLeft || touchState.left ? -1 : 0) +
-    (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0);
+  const x =
+    (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0) -
+    (keys.KeyA || keys.ArrowLeft || touchState.left ? 1 : 0);
+  const z =
+    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0) -
+    (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0);
 
-  const acceleration = 18;
-  const maxSpeed = 20;
-  const reverseSpeed = 8;
+  const input = new THREE.Vector2(x, z);
+  const moving = input.lengthSq() > 0;
+  if (moving) input.normalize();
 
-  velocity.z += throttle * acceleration * dt;
-  velocity.z *= Math.pow(0.04, dt);
-  velocity.z = THREE.MathUtils.clamp(velocity.z, -reverseSpeed, maxSpeed);
+  const speed = keys.ShiftLeft || keys.ShiftRight ? 6.2 : 3.8;
+  const move = new THREE.Vector3(input.x, 0, input.y);
+  const next = player.position.clone().addScaledVector(move, speed * dt);
 
-  const direction = velocity.z >= 0 ? 1 : -1;
-  const steeringStrength = Math.min(Math.abs(velocity.z) / 6, 1);
-  car.rotation.y += steer * direction * 1.7 * dt * steeringStrength;
+  if (!blocked(next)) player.position.copy(next);
 
-  const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
-  previousPosition.copy(car.position);
-  car.position.addScaledVector(forward, velocity.z * dt);
-
-  if (isBlocked(car.position)) {
-    car.position.copy(previousPosition);
-    velocity.z *= -0.18;
+  if (moving) {
+    const targetAngle = Math.atan2(input.x, input.y);
+    player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, targetAngle, 0.18);
   }
 
-  car.position.x = THREE.MathUtils.clamp(car.position.x, -118, 118);
-  car.position.z = THREE.MathUtils.clamp(car.position.z, -118, 118);
+  playPlayerAnimation(moving ? (speed > 5 ? 'Run' : 'Walk') : 'Idle');
+  hudSpeed.textContent = moving ? (speed > 5 ? 'Běh' : 'Chůze') + ' · ' + Math.round(speed * 10) / 10 + ' m/s' : 'Stojí · Idle';
+}
 
-  const wheelRotation = velocity.z * dt / 0.36;
-  for (const wheel of wheels) {
-    wheel.rotateX(wheelRotation);
+function updateNpcs(dt) {
+  for (const npc of npcs) {
+    npc.mixer.update(dt);
+    npc.model.rotation.y += Math.sin(performance.now() * 0.0006 + npc.phase) * 0.0004;
   }
 }
 
 function updateCamera() {
-  const desired = new THREE.Vector3(0, 5.5, -9)
-    .applyQuaternion(car.quaternion)
-    .add(car.position);
+  if (!player) return;
+
+  const desired = new THREE.Vector3(0, 3.6, 6.5)
+    .applyQuaternion(player.quaternion)
+    .add(player.position);
+
   camera.position.lerp(desired, 0.1);
 
-  const target = new THREE.Vector3(0, 1, 2.8)
-    .applyQuaternion(car.quaternion)
-    .add(car.position);
+  const target = new THREE.Vector3(0, 1.1, 0)
+    .applyQuaternion(player.quaternion)
+    .add(player.position);
+
   camera.lookAt(target);
+}
+
+const clock = new THREE.Clock();
+
+async function start() {
+  hudObjective.textContent = 'Načítám character pack…';
+  await loadCharacters();
+  hudObjective.textContent = 'Player ready · Chůze / běh';
+  animate();
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-  updateCar(dt);
+
+  playerMixer?.update(dt);
+  updatePlayer(dt);
+  updateNpcs(dt);
   updateCamera();
+
   renderer.render(scene, camera);
 }
 
@@ -225,4 +312,8 @@ addEventListener('resize', () => {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 });
 
-animate();
+start().catch(error => {
+  console.error(error);
+  hudObjective.textContent = 'Character se nepodařilo načíst';
+});
+
