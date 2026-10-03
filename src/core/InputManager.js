@@ -15,6 +15,7 @@ export class InputManager {
   consume(name) { return this.router.consume(name); }
 
   remap(action, codeOrCodes) { return this.router.remap(action, codeOrCodes); }
+  clearBinding(action) { return this.router.clearBinding(action); }
   setControlSettings(settings) { return this.router.setSettings(settings); }
   resetControlSettings() { return this.router.resetSettings(); }
 
