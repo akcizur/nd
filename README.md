@@ -18,6 +18,10 @@ Three.js / Vite browser 3D city-game prototype.
 - distance fog, shadows and follow camera
 - GitHub Pages deployment
 - MavonEngine Core dependency prepared for the next gameplay/physics layer
+- rigged third-person player character
+- Idle / Walk / Run animation state machine
+- CC0 rigged NPC character pack
+- skeleton-aware NPC cloning
 
 ## Free asset kits
 
