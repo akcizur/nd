@@ -130,10 +130,10 @@ const loader = new GLTFLoader();
 const characterPack = new CharacterPackLoader(loader);
 const buildingPack = new BuildingPackLoader(loader);
 const SOLDIER_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Soldier.glb';
-const GOBKIT_URLS = [
-  'https://gobkit.com/freebies/minion/minion-a01.glb',
-  'https://gobkit.com/freebies/minion/minion-b01.glb',
-  'https://gobkit.com/freebies/minion/minion-c01.glb'
+const GOBKIT_MODELS = [
+  { url: 'https://gobkit.com/freebies/minion/minion-a01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
+  { url: 'https://gobkit.com/freebies/minion/minion-b01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
+  { url: 'https://gobkit.com/freebies/minion/minion-c01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
 ];
 
 let player = null;
@@ -231,15 +231,18 @@ async function loadNpc(url, position, universal = false) {
     const mixer = new THREE.AnimationMixer(model);
     const clips = universal
       ? characterPack.retargetClips(universalAnimations, model)
-      : gltf.animations;
-    for (const clip of clips) mixer.clipAction(clip).play();
-    if (universal) {
-      const idle = clips.find(clip => /idle|stand|breath/i.test(clip.name));
-      if (idle) {
-        mixer.stopAllAction();
-        mixer.clipAction(idle).play();
-      }
-    }
+      : (() => {
+          const source = gltf.animations?.[0];
+          if (!source) return [];
+          return Object.entries(GOBKIT_MODELS.find(item => item.url === url)?.clips || {})
+            .map(([name, [from, to]]) =>
+              THREE.AnimationUtils.subclip(source, name, from, to + 1, GOBKIT_MODELS.find(item => item.url === url)?.fps || 24)
+            );
+        })();
+
+    const idle = clips.find(clip => /^idle$/i.test(clip.name)) ||
+      clips.find(clip => /idle|stand|breath/i.test(clip.name));
+    if (idle) mixer.clipAction(idle).play();
     npcs.push({ model, mixer, phase: Math.random() * Math.PI * 2 });
   } catch (error) {
     console.warn('NPC asset failed:', error);
@@ -252,8 +255,8 @@ async function loadCharacters() {
   await Promise.all([
     loadNpc(null, new THREE.Vector3(-7, 0, -8), true),
     loadNpc(null, new THREE.Vector3(7, 0, -12), true),
-    ...GOBKIT_URLS.map((url, index) =>
-      loadNpc(url, new THREE.Vector3((index - 1) * 5, 0, -18 - index * 3))
+    ...GOBKIT_MODELS.map((asset, index) =>
+      loadNpc(asset.url, new THREE.Vector3((index - 1) * 5, 0, -18 - index * 3))
     ),
   ]);
 }
