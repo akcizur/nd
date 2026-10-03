@@ -3,6 +3,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
 import { MavonGameplayBridge } from './game/mavonLayer.js';
+import { GameState, GameStateManager } from './core/GameState.js';
+import { InputManager } from './core/InputManager.js';
+import { MobileControls } from './mobile/MobileControls.js';
+import { MainMenu } from './ui/MainMenu.js';
+import { GameMenu } from './ui/GameMenu.js';
+import { SettingsMenu } from './ui/SettingsMenu.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd7f5);
@@ -187,37 +193,114 @@ async function loadCharacters() {
   );
 }
 
-const keys = Object.create(null);
-const touchState = { accelerate: false, reverse: false, left: false, right: false };
+const input = new InputManager();
+const gameState = new GameStateManager(GameState.MAIN_MENU);
+const mobileControls = new MobileControls(input);
+let cameraYaw = 0;
+let cameraPitch = 0.28;
+let settingsReturnState = GameState.MAIN_MENU;
 
-addEventListener('keydown', event => {
-  keys[event.code] = true;
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
-    event.preventDefault();
-  }
-  if (event.code === 'KeyE' && !event.repeat) toggleVehicle();
+const mainMenu = new MainMenu({
+  onPlay: () => enterPlay(),
+  onSettings: () => openSettings(GameState.MAIN_MENU),
+  onAbout: () => showAbout(),
 });
+const gameMenu = new GameMenu({
+  onResume: () => resumeGame(),
+  onRestart: () => restartGame(),
+  onSettings: () => openSettings(GameState.PAUSED),
+  onMainMenu: () => returnToMainMenu(),
+});
+const settingsMenu = new SettingsMenu({ onBack: () => closeSettings() });
 
-addEventListener('keyup', event => { keys[event.code] = false; });
+const aboutMenu = document.createElement('section');
+aboutMenu.className = 'menu-screen about-menu';
+aboutMenu.innerHTML = `
+  <div class="menu-card">
+    <div class="menu-kicker">ND / CITY</div>
+    <h2>ABOUT</h2>
+    <p>Three.js city driving prototype.</p>
+    <p>Keyboard, touch and dynamic mobile camera controls.</p>
+    <button data-menu="back">BACK</button>
+  </div>`;
+document.body.appendChild(aboutMenu);
+aboutMenu.querySelector('[data-menu="back"]').onclick = () => {
+  aboutMenu.classList.remove('visible');
+  mainMenu.show();
+};
 
-document.querySelectorAll('[data-control]').forEach(button => {
-  const control = button.dataset.control;
-  const set = value => {
-    touchState[control] = value;
-    button.classList.toggle('active', value);
-  };
-  button.addEventListener('pointerdown', event => {
-    event.preventDefault();
-    button.setPointerCapture?.(event.pointerId);
-    if (control === 'interact') {
-      toggleVehicle();
-      return;
-    }
-    set(true);
-  });
-  button.addEventListener('pointerup', () => set(false));
-  button.addEventListener('pointercancel', () => set(false));
-  button.addEventListener('pointerleave', () => set(false));
+mobileControls.root.classList.add('hidden');
+gameMenu.button.classList.add('hidden');
+
+function showAbout() {
+  mainMenu.hide();
+  aboutMenu.classList.add('visible');
+}
+
+function openSettings(returnState) {
+  settingsReturnState = returnState;
+  mainMenu.hide();
+  gameMenu.close();
+  aboutMenu.classList.remove('visible');
+  settingsMenu.show();
+  gameState.set(GameState.SETTINGS);
+}
+
+function closeSettings() {
+  settingsMenu.hide();
+  if (settingsReturnState === GameState.PAUSED) {
+    gameState.set(GameState.PAUSED);
+    gameMenu.open();
+  } else {
+    gameState.set(GameState.MAIN_MENU);
+    mainMenu.show();
+  }
+}
+
+function enterPlay() {
+  if (!player || !car) return;
+  mainMenu.hide();
+  aboutMenu.classList.remove('visible');
+  settingsMenu.hide();
+  gameMenu.close();
+  gameMenu.button.classList.remove('hidden');
+  mobileControls.root.classList.remove('hidden');
+  gameState.set(GameState.PLAYING);
+  input.consume('interact');
+  input.consume('pause');
+}
+
+function resumeGame() {
+  gameMenu.close();
+  gameState.set(GameState.PLAYING);
+}
+
+function restartGame() {
+  if (!player) return;
+  player.position.set(0, 0, 1);
+  player.rotation.set(0, 0, 0);
+  player.visible = true;
+  car.position.set(0, 0, 5);
+  car.rotation.set(0, 0, 0);
+  car.userData.speed = 0;
+  inVehicle = false;
+  document.body.classList.remove('vehicle-mode');
+  gameMenu.close();
+  gameState.set(GameState.PLAYING);
+}
+
+function returnToMainMenu() {
+  gameMenu.close();
+  gameMenu.button.classList.add('hidden');
+  mobileControls.root.classList.add('hidden');
+  gameState.set(GameState.MAIN_MENU);
+  mainMenu.show();
+}
+
+gameState.onChange(state => {
+  document.body.dataset.gameState = state;
+  if (state !== GameState.PLAYING) mobileControls.root.classList.add('hidden');
+  else mobileControls.root.classList.remove('hidden');
 });
 
 const hudObjective = document.querySelector('#objective');
@@ -284,23 +367,12 @@ function exitVehicle() {
 function updatePlayer(dt) {
   if (!player || inVehicle) return;
 
-  // On foot: directions are relative to the character/camera heading.
-  // Forward is -Z, right is +X. This keeps W/S/A/D coherent after turning.
-  const strafe =
-    (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0) -
-    (keys.KeyA || keys.ArrowLeft || touchState.left ? 1 : 0);
-  const forwardInput =
-    (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0) -
-    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0);
-
-  const input = new THREE.Vector2(strafe, forwardInput);
-  const moving = input.lengthSq() > 0;
-  if (moving) input.normalize();
-
-  const speed = keys.ShiftLeft || keys.ShiftRight ? 6.2 : 3.8;
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
-  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(player.quaternion);
-  const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
+  const moveInput = input.move;
+  const moving = moveInput.lengthSq() > 0;
+  const speed = input.run ? 6.2 : 3.8;
+  const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
+  const right = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
+  const move = forward.multiplyScalar(moveInput.y).add(right.multiplyScalar(moveInput.x));
   const next = player.position.clone().addScaledVector(move, speed * dt);
 
   if (!blocked(next)) player.position.copy(next);
@@ -318,10 +390,9 @@ function updatePlayer(dt) {
 
 function updateVehicle(dt) {
   if (!inVehicle) return;
-  const throttle = (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0) -
-    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0);
-  const steering = (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0) -
-    (keys.KeyA || keys.ArrowLeft || touchState.left ? 1 : 0);
+  const vehicleInput = input.move;
+  const throttle = THREE.MathUtils.clamp(vehicleInput.y, -1, 1);
+  const steering = THREE.MathUtils.clamp(vehicleInput.x, -1, 1);
 
   const maxSpeed = 13;
   const targetSpeed = throttle * maxSpeed;
@@ -352,22 +423,44 @@ function updateNpcs(dt) {
   }
 }
 
-function updateCamera() {
+function updateCamera(dt) {
   if (!player) return;
   const subject = inVehicle ? car : player;
+  const cameraInput = input.cameraInput;
+  const cameraActive = cameraInput.lengthSq() > 0.001;
+
+  if (cameraActive) {
+    const sensitivity = settingsMenu.sensitivity * 1.8;
+    cameraYaw += cameraInput.x * sensitivity * dt * 3.2;
+    const pitchDirection = settingsMenu.invertY ? -1 : 1;
+    cameraPitch = THREE.MathUtils.clamp(cameraPitch + cameraInput.y * sensitivity * dt * 2.1 * pitchDirection, -0.15, 0.82);
+  } else if (input.move.lengthSq() > 0.01) {
+    const targetYaw = subject.rotation.y + Math.PI;
+    const delta = THREE.MathUtils.euclideanModulo(targetYaw - cameraYaw + Math.PI, Math.PI * 2) - Math.PI;
+    cameraYaw += delta * Math.min(1, dt * 2.2);
+  }
+
   const distance = inVehicle ? 8.2 : 6.5;
-  const height = inVehicle ? 4.3 : 3.6;
-  const desired = new THREE.Vector3(0, height, distance)
-    .applyQuaternion(subject.quaternion)
-    .add(subject.position);
+  const height = inVehicle ? 3.1 : 2.7;
+  const horizontal = Math.cos(cameraPitch) * distance;
+  const desired = new THREE.Vector3(
+    subject.position.x + Math.sin(cameraYaw) * horizontal,
+    subject.position.y + height + Math.sin(cameraPitch) * distance,
+    subject.position.z + Math.cos(cameraYaw) * horizontal
+  );
   camera.position.lerp(desired, 0.1);
-  const target = new THREE.Vector3(0, inVehicle ? 1.0 : 1.1, 0)
-    .applyQuaternion(subject.quaternion)
-    .add(subject.position);
+
+  const target = subject.position.clone();
+  target.y += inVehicle ? 1.0 : 1.1;
   camera.lookAt(target);
 }
 
 function updateInteractionHud() {
+  if (input.consume('interact')) toggleVehicle();
+  if (input.consume('pause') && gameState.current === GameState.PLAYING) {
+    gameState.set(GameState.PAUSED);
+    gameMenu.open();
+  }
   if (inVehicle) return;
   if (nearCar()) {
     hudObjective.textContent = 'E · nastoupit do auta';
@@ -380,22 +473,24 @@ function updateInteractionHud() {
 
 const clock = new THREE.Clock();
 async function start() {
-  hudObjective.textContent = 'Načítám character pack…';
+  hudObjective.textContent = 'Loading city…';
   await loadCharacters();
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
-  hudObjective.textContent = 'Volný pohyb městem';
+  hudObjective.textContent = 'Ready · PLAY';
   animate();
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-  playerMixer?.update(dt);
-  updatePlayer(dt);
-  updateVehicle(dt);
-  updateNpcs(dt);
-  updateInteractionHud();
-  updateCamera();
+  if (gameState.current === GameState.PLAYING) {
+    playerMixer?.update(dt);
+    updatePlayer(dt);
+    updateVehicle(dt);
+    updateNpcs(dt);
+    updateInteractionHud();
+    updateCamera(dt);
+  }
   renderer.render(scene, camera);
 }
 
