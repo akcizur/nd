@@ -3,6 +3,7 @@ export class DebugOverlay {
     this.enabled = enabled;
     this.root = document.createElement('pre');
     this.root.className = 'debug-overlay';
+    Object.assign(this.root.style, { position:'fixed', top:'8px', left:'8px', zIndex:'9999', margin:0, padding:'8px 10px', background:'rgba(0,0,0,.72)', color:'#fff', font:'11px/1.35 monospace', pointerEvents:'none', whiteSpace:'pre', borderRadius:'6px' });
     this.root.hidden = !enabled;
     this.root.setAttribute('aria-hidden', enabled ? 'false' : 'true');
     document.body.appendChild(this.root);
