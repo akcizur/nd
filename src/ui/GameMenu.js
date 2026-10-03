@@ -14,7 +14,7 @@ export class GameMenu {
         <h2>GAME MENU</h2>
         <button data-menu="resume">RESUME</button>
         <button data-menu="restart">RESTART</button>
-        <button data-menu="settings">SETTINGS</button>
+        <button data-menu="settings">CONTROLS</button>
         <button data-menu="main">MAIN MENU</button>
       </div>
     `;
