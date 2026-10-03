@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import './style.css';
+import { MavonGameplayBridge } from './game/mavonLayer.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd7f5);
@@ -119,6 +120,7 @@ const playerActions = {};
 let playerState = 'Idle';
 let inVehicle = false;
 let interactLocked = false;
+let gameplay = null;
 
 async function loadPlayer() {
   const gltf = await loader.loadAsync(SOLDIER_URL);
