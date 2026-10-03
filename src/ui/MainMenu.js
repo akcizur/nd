@@ -7,7 +7,7 @@ export class MainMenu {
         <div class="menu-kicker">ND / CITY</div>
         <h1>ND</h1>
         <button data-menu="play">PLAY</button>
-        <button data-menu="settings">SETTINGS</button>
+        <button data-menu="settings">CONTROLS</button>
         <button data-menu="about">ABOUT</button>
       </div>
     `;
