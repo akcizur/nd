@@ -225,7 +225,7 @@ const gameMenu = new GameMenu({
   onSettings: () => openSettings(GameState.PAUSED),
   onMainMenu: () => returnToMainMenu(),
 });
-const settingsMenu = new SettingsMenu({ onBack: () => closeSettings() });
+const settingsMenu = new SettingsMenu({ onBack: () => closeSettings(), inputRouter: input });
 
 const aboutMenu = document.createElement('section');
 aboutMenu.className = 'menu-screen about-menu';
