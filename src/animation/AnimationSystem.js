@@ -17,6 +17,23 @@ export class AnimationSystem {
     if (this.actions.idle) this.play('idle', 0);
   }
 
+  addClips(clips = []) {
+    if (!this.mixer) return;
+    for (const clip of clips) {
+      const key = clip.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      this.actions[key] = this.mixer.clipAction(clip);
+      const aliases = [];
+      if (/idle|stand|breath/.test(key)) aliases.push('idle');
+      if (/walk|walking|locomotion/.test(key)) aliases.push('walk');
+      if (/run|running|jog/.test(key)) aliases.push('run');
+      if (/sprint/.test(key)) aliases.push('sprint');
+      if (/jump/.test(key)) aliases.push('jump');
+      if (/fall/.test(key)) aliases.push('fall');
+      if (/crouch/.test(key)) aliases.push('crouch');
+      for (const alias of aliases) if (!this.actions[alias]) this.actions[alias] = this.mixer.clipAction(clip);
+    }
+  }
+
   _resolve(name) {
     const key = String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
     if (this.actions[key]) return key;
