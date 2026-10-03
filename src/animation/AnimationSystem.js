@@ -64,11 +64,11 @@ export class AnimationSystem {
   _configureLooping() {
     for (const name of ['idle', 'walk', 'run', 'sprint', 'crouch']) {
       const action = this.actions[name];
-      if (action) action.setLoop(2201, Infinity);
+      if (action) action.setLoop(THREE.LoopRepeat, Infinity);
     }
     for (const name of ['jump', 'fall']) {
       const action = this.actions[name];
-      if (action) action.setLoop(2201, Infinity);
+      if (action) action.setLoop(THREE.LoopRepeat, Infinity);
     }
   }
 
@@ -100,7 +100,7 @@ export class AnimationSystem {
   /**
    * Dynamic locomotion controller.
    *
-   * Uses the compatible Soldier clips as a small blend tree:
+   * Uses compatible humanoid clips as a small blend tree:
    * idle -> walk -> run. The weights follow actual physical velocity,
    * while timeScale follows stride speed. This avoids hard animation
    * snapping when acceleration/sprint state changes.
@@ -149,7 +149,7 @@ export class AnimationSystem {
     if (walk) walk.enabled = walk.weight > 0.001;
     if (run) run.enabled = run.weight > 0.001;
 
-    // Soldier Walk/Run clips are authored for a fixed cadence. Match their
+    // Locomotion clips are authored for a fixed cadence. Match their
     // playback rate to gameplay speed instead of making the feet slide.
     if (walk) walk.timeScale = Math.max(0.55, speed / 3.8);
     if (run) run.timeScale = Math.max(0.65, speed / 6.2);
