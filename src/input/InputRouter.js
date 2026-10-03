@@ -28,6 +28,7 @@ export class InputRouter {
     this.touchMove = { x: 0, y: 0 };
     this.touchLook = { x: 0, y: 0 };
     this.mouseLookDelta = { x: 0, y: 0 };
+    this.lookVelocity = { x: 0, y: 0 };
 
     this.manualActions = Object.create(null);
     this.toggleActions = Object.create(null);
@@ -103,7 +104,15 @@ export class InputRouter {
   }
 
   remap(action, codes) {
-    this.bindings[action] = Array.isArray(codes) ? [...codes] : [codes];
+    const next = Array.isArray(codes) ? [...codes].filter(Boolean) : [codes].filter(Boolean);
+    if (!next.length) return false;
+    this.bindings[action] = next;
+    this.save();
+    return true;
+  }
+
+  clearBinding(action) {
+    this.bindings[action] = [];
     this.save();
   }
 
@@ -233,8 +242,11 @@ export class InputRouter {
       ? Boolean(this.toggleActions.sprint)
       : this._down('sprint');
 
-    this.input.setMove(this._clamp(moveX), this._clamp(moveY));
-    this.input.setLook(this._clamp(lookX), this._clamp(lookY));
+    const move = this._applyDeadzone(moveX, moveY, 0.08);
+    const look = this._applyDeadzone(lookX, lookY, 0.06);
+
+    this.input.setMove(move.x, move.y);
+    this.input.setLook(look.x, look.y);
 
     this.input.setAction(
       'sprint',
@@ -272,7 +284,21 @@ export class InputRouter {
     });
   }
 
+  _applyDeadzone(x, y, deadzone) {
+    x = this._clamp(x);
+    y = this._clamp(y);
+    const magnitude = Math.hypot(x, y);
+    if (magnitude <= deadzone) return { x: 0, y: 0 };
+
+    const adjusted = (magnitude - deadzone) / (1 - deadzone);
+    const factor = adjusted / magnitude;
+    return {
+      x: this._clamp(x * factor),
+      y: this._clamp(y * factor),
+    };
+  }
+
   _clamp(value) {
-    return Math.max(-1, Math.min(1, value || 0));
+    return Math.max(-1, Math.min(1, Number(value) || 0));
   }
 }
