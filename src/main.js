@@ -365,7 +365,13 @@ function enterPlay() {
   if (!player || !car) return;
   if (!inVehicle) physicsWorld?.setCharacterEnabled(playerPhysics, true);
   cameraSystem ||= new CameraSystem(camera);
-  playerController ||= new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
+  playerController ||= new PlayerController({
+    object: player,
+    input: input.input,
+    camera: cameraSystem,
+    physics: physicsWorld,
+    movementSettings,
+  });
   vehicleController ||= new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
@@ -398,6 +404,7 @@ function restartGame() {
   car.userData.speed = 0;
   inVehicle = false;
   document.body.classList.remove('vehicle-mode');
+  mobileControls.setVehicleMode(false);
   gameMenu.close();
   gameState.set(GameState.PLAYING);
 }
@@ -488,6 +495,7 @@ function exitVehicle() {
   hudHint.textContent = 'WASD / šipky · Shift = běh · E = nastoupit';
   document.body.classList.remove('vehicle-mode');
   mobileControls.setVehicleMode(false);
+  playerController?.resetMovement();
   setTimeout(() => { interactLocked = false; }, 180);
 }
 
