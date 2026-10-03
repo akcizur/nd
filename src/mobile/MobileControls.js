@@ -37,21 +37,41 @@ export class MobileControls {
     for (const button of this.buttons) {
       const down = event => {
         event.preventDefault();
+        button.setPointerCapture?.(event.pointerId);
         const action = button.dataset.action;
-        input.setAction(action, true);
-        button.classList.add('active');
 
         if (action === 'interact' || action === 'jump') {
           input.pulseAction(action);
-          input.setAction(action, false);
+          button.classList.add('active');
+          return;
         }
+
+        if (action === 'sprint' && input.controlSettings.sprintMode === 'toggle') {
+          const active = input.toggleAction(action);
+          button.classList.toggle('active', active);
+          return;
+        }
+
+        input.setAction(action, true);
+        button.classList.add('active');
       };
 
       const up = event => {
         event?.preventDefault();
         const action = button.dataset.action;
-        if (action !== 'interact' && action !== 'jump') input.setAction(action, false);
-        button.classList.remove('active');
+        if (
+          action !== 'interact' &&
+          action !== 'jump' &&
+          !(action === 'sprint' && input.controlSettings.sprintMode === 'toggle')
+        ) {
+          input.setAction(action, false);
+        }
+        button.classList.toggle(
+          'active',
+          action === 'sprint' &&
+          input.controlSettings.sprintMode === 'toggle' &&
+          Boolean(input.input.sprint)
+        );
       };
 
       button.addEventListener('pointerdown', down, { passive: false });
