@@ -22,6 +22,8 @@ export class InputRouter {
     this.bindings = structuredClone(bindings);
     this.keys = Object.create(null);
     this.gamepad = null;
+    this.touchMove = { x: 0, y: 0 };
+    this.touchLook = { x: 0, y: 0 };
     this.enabled = true;
     this.mouseLook = false;
     this._bindKeyboard();
@@ -60,8 +62,8 @@ export class InputRouter {
     this.bindings[action] = Array.isArray(codes) ? [...codes] : [codes];
   }
 
-  setMove(x, y) { this.input.setMove(x, y); }
-  setLook(x, y) { this.input.setLook(x, y); }
+  setMove(x, y) { this.touchMove.x=x; this.touchMove.y=y; }
+  setLook(x, y) { this.touchLook.x=x; this.touchLook.y=y; }
   setAction(name, value = true) { this.input.setAction(name, value); }
   consume(name) { return this.input.consume(name); }
 
@@ -72,12 +74,14 @@ export class InputRouter {
     const y = (this._down('moveForward') ? 1 : 0) - (this._down('moveBackward') ? 1 : 0);
     const pad = navigator.getGamepads?.()[this.gamepad?.index ?? -1];
     let moveX = x, moveY = y, lookX = 0, lookY = 0;
+    if (Math.abs(this.touchMove.x) > 0.001 || Math.abs(this.touchMove.y) > 0.001) { moveX=this.touchMove.x; moveY=this.touchMove.y; }
+    lookX=this.touchLook.x; lookY=this.touchLook.y;
 
     if (pad) {
       moveX = Math.abs(pad.axes[0] ?? 0) > 0.12 ? pad.axes[0] : moveX;
       moveY = Math.abs(pad.axes[1] ?? 0) > 0.12 ? -(pad.axes[1] ?? 0) : moveY;
-      lookX = Math.abs(pad.axes[2] ?? 0) > 0.12 ? pad.axes[2] : 0;
-      lookY = Math.abs(pad.axes[3] ?? 0) > 0.12 ? pad.axes[3] : 0;
+      if (Math.abs(pad.axes[2] ?? 0) > 0.12) lookX=pad.axes[2];
+      if (Math.abs(pad.axes[3] ?? 0) > 0.12) lookY=pad.axes[3];
       if (pad.buttons[0]?.pressed) this.input.setAction('jump', true);
       this.input.setAction('sprint', Boolean(pad.buttons[10]?.pressed));
       this.input.setAction('crouch', Boolean(pad.buttons[1]?.pressed));
