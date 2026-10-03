@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 export class VirtualJoystick {
-  constructor({ zone, className = 'virtual-joystick', onChange, radius }) {
+  constructor({ zone, className = 'virtual-joystick', onChange, radius, deadzone = 0.08 }) {
     this.zone = zone;
     this.onChange = onChange;
     this.radius = radius;
+    this.deadzone = deadzone;
     this.activeTouch = null;
     this.center = new THREE.Vector2();
     this.value = new THREE.Vector2();
@@ -21,9 +22,6 @@ export class VirtualJoystick {
     this.el.appendChild(this.ring);
     zone.appendChild(this.el);
 
-    // Mobile joystick uses native Touch Events exclusively.
-    // This avoids PointerEvent/TouchEvent compatibility conflicts on iOS WebKit
-    // and gives each joystick its own touch identifier for two-thumb control.
     zone.addEventListener('touchstart', event => this.start(event), { passive: false });
     window.addEventListener('touchmove', event => this.move(event), { passive: false });
     window.addEventListener('touchend', event => this.end(event), { passive: false });
@@ -35,10 +33,13 @@ export class VirtualJoystick {
     this.el.style.setProperty('--joystick-radius', `${radius}px`);
   }
 
+  setDeadzone(deadzone) {
+    this.deadzone = THREE.MathUtils.clamp(Number(deadzone) || 0, 0, 0.3);
+  }
+
   start(event) {
     if (this.activeTouch !== null) return;
-
-    const touch = event.changedTouches[0];
+    const touch = Array.from(event.changedTouches).find(() => true);
     if (!touch) return;
 
     event.preventDefault();
@@ -47,16 +48,12 @@ export class VirtualJoystick {
     this.el.style.left = `${touch.clientX}px`;
     this.el.style.top = `${touch.clientY}px`;
     this.el.classList.add('active');
-
     this.update(touch.clientX, touch.clientY);
   }
 
   move(event) {
     if (this.activeTouch === null) return;
-
-    const touch = Array.from(event.touches).find(
-      item => item.identifier === this.activeTouch
-    );
+    const touch = Array.from(event.touches).find(item => item.identifier === this.activeTouch);
     if (!touch) return;
 
     event.preventDefault();
@@ -65,10 +62,7 @@ export class VirtualJoystick {
 
   end(event) {
     if (this.activeTouch === null) return;
-
-    const touch = Array.from(event.changedTouches).find(
-      item => item.identifier === this.activeTouch
-    );
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === this.activeTouch);
     if (!touch) return;
 
     event.preventDefault();
@@ -88,13 +82,12 @@ export class VirtualJoystick {
     const nx = (dx * scale) / max;
     const ny = (dy * scale) / max;
 
-    const deadzone = 0.08;
     const magnitude = Math.hypot(nx, ny);
 
-    if (magnitude < deadzone) {
+    if (magnitude < this.deadzone) {
       this.value.set(0, 0);
     } else {
-      const adjusted = (magnitude - deadzone) / (1 - deadzone);
+      const adjusted = (magnitude - this.deadzone) / (1 - this.deadzone);
       const factor = adjusted / magnitude;
       this.value.set(nx * factor, -ny * factor);
     }
