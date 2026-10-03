@@ -56,7 +56,7 @@ export class VehicleController {
     const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
     const velocity = forward.multiplyScalar(this.speed);
 
-    this.physics.setVehicleState(this.physicsBody, { velocity, yaw: this.yaw });
+    this.physics.setVehicleState(this.physicsBody, { velocity, yaw: this.yaw, dt });
     if (Math.abs(this.speed) < 0.03) this.speed = 0;
 
     for (const wheel of this.wheels) {
