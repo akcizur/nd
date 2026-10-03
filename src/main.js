@@ -18,6 +18,7 @@ import { CameraSystem } from './camera/CameraSystem.js';
 import { AnimationSystem } from './animation/AnimationSystem.js';
 import { CheckpointSystem } from './game/CheckpointSystem.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
+import { CitySimulation } from './world/CitySimulation.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd7f5);
@@ -148,6 +149,7 @@ let interactLocked = false;
 let gameplay = null;
 let playerPhysics = null;
 let vehiclePhysics = null;
+let citySimulation = null;
 
 let universalAnimations = [];
 
@@ -630,6 +632,8 @@ async function start() {
   // Load pack geometry first: loadBuildings() replaces the procedural layout
   // and rebuilds collisionBoxes. Physics colliders must be created afterwards.
   await loadCharacters();
+  citySimulation = new CitySimulation(world, { trafficCount: 16, pedestrianCount: 20 });
+  citySimulation.init();
   for (const box of collisionBoxes) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -659,6 +663,7 @@ async function start() {
   systems.register('vehicle-controller', { fixedUpdate: updateVehicle });
   systems.register('animation', { update: dt => playerAnimation?.update(dt) });
   systems.register('npcs', { update: updateNpcs });
+  systems.register('city-simulation', { update: dt => citySimulation?.update(dt) });
   systems.register('interaction', { update: updateInteractionHud });
   systems.register('camera', { update: updateCamera });
   systems.register('debug', { update: dt => debug.update({ dt, gameState: gameState.current, player: playerPhysics, vehicle: vehiclePhysics, physics: physicsWorld, inVehicle }) });
