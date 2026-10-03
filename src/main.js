@@ -152,15 +152,37 @@ let vehiclePhysics = null;
 let universalAnimations = [];
 
 async function loadPlayer() {
-  const gltf = await characterPack.loadUniversal();
-  player = characterPack.clone(gltf, new THREE.Vector3(0, 0, 1), 1.0);
-  world.add(player);
-  playerAnimation = new AnimationSystem(player);
-  playerAnimation.bind(new THREE.AnimationMixer(player), []);
-  const animationGltf = await characterPack.loadAnimationLibrary();
-  universalAnimations = characterPack.retargetClips(animationGltf.animations, player);
-  playerAnimation.addClips(universalAnimations);
-  playerAnimation.play('idle', 0);
+  try {
+    const gltf = await characterPack.loadUniversal();
+    player = characterPack.clone(gltf, new THREE.Vector3(0, 0, 1), 1.0);
+    world.add(player);
+    playerAnimation = new AnimationSystem(player);
+    playerAnimation.bind(new THREE.AnimationMixer(player), []);
+
+    try {
+      const animationGltf = await characterPack.loadAnimationLibrary();
+      universalAnimations = characterPack.retargetClips(animationGltf.animations, player);
+      playerAnimation.addClips(universalAnimations);
+    } catch (animationError) {
+      console.warn('Universal Animation Library failed; using state fallbacks.', animationError);
+    }
+    playerAnimation.play('idle', 0);
+  } catch (characterError) {
+    console.warn('Universal character pack failed; falling back to Three.js Soldier.', characterError);
+    const gltf = await loader.loadAsync(SOLDIER_URL);
+    player = gltf.scene;
+    player.scale.setScalar(1.05);
+    player.position.set(0, 0, 1);
+    player.traverse(node => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    world.add(player);
+    playerAnimation = new AnimationSystem(player);
+    playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations);
+  }
 }
 
 async function loadBuildings() {
