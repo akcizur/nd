@@ -3,12 +3,12 @@ import './style.css';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 45, 180);
+scene.fog = new THREE.Fog(0x87ceeb, 55, 190);
 
 const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 500);
 camera.position.set(8, 6, 10);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -34,7 +34,9 @@ floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 world.add(floor);
 
-function box(x, y, z, w, h, d, color) {
+const buildings = [];
+
+function box(x, y, z, w, h, d, color, isBuilding = false) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
     new THREE.MeshStandardMaterial({ color, roughness: 0.85 })
@@ -43,12 +45,15 @@ function box(x, y, z, w, h, d, color) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   world.add(mesh);
+
+  if (isBuilding) {
+    buildings.push({ mesh, halfX: w / 2, halfZ: d / 2 });
+  }
   return mesh;
 }
 
 function road(x, z, w, d) {
-  const r = box(x, 0.025, z, w, 0.05, d, 0x171717);
-  r.receiveShadow = true;
+  return box(x, 0.025, z, w, 0.05, d, 0x171717);
 }
 
 road(0, 0, 240, 12);
@@ -62,11 +67,15 @@ const buildingColors = [0x686868, 0x777777, 0x555555, 0x858585];
 
 for (let x = -84; x <= 84; x += 24) {
   for (let z = -84; z <= 84; z += 24) {
-    if (Math.abs(x) < 15 || Math.abs(z) < 15 || Math.abs(x) < 45 && Math.abs(z) < 45 && (x === 36 || z === 36 || x === -36 || z === -36)) continue;
+    const onMainRoad = Math.abs(x) < 15 || Math.abs(z) < 15;
+    const onCrossRoad = Math.abs(x) === 36 || Math.abs(z) === 36;
+    if (onMainRoad || (onCrossRoad && (Math.abs(x) === 36 || Math.abs(z) === 36))) continue;
+
     const w = 14 + ((Math.abs(x + z) * 3) % 5);
     const d = 14 + ((Math.abs(x - z) * 2) % 5);
     const h = 5 + ((Math.abs(x * 7 + z * 3)) % 16);
-    box(x, h / 2, z, w, h, d, buildingColors[Math.abs(x + z) % buildingColors.length]);
+    const color = buildingColors[Math.abs((x + z) / 24) % buildingColors.length];
+    box(x, h / 2, z, w, h, d, color, true);
   }
 }
 
@@ -87,6 +96,7 @@ cabin.position.set(0, 1.08, -0.15);
 cabin.castShadow = true;
 car.add(cabin);
 
+const wheels = [];
 for (const x of [-0.82, 0.82]) {
   for (const z of [-1.15, 1.15]) {
     const wheel = new THREE.Mesh(
@@ -96,6 +106,7 @@ for (const x of [-0.82, 0.82]) {
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(x, 0.4, z);
     wheel.castShadow = true;
+    wheels.push(wheel);
     car.add(wheel);
   }
 }
@@ -104,15 +115,58 @@ car.position.set(0, 0, 5);
 world.add(car);
 
 const keys = Object.create(null);
-addEventListener('keydown', e => { keys[e.code] = true; });
-addEventListener('keyup', e => { keys[e.code] = false; });
+const touchState = { accelerate: false, reverse: false, left: false, right: false };
+
+addEventListener('keydown', event => {
+  keys[event.code] = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
+    event.preventDefault();
+  }
+});
+
+addEventListener('keyup', event => { keys[event.code] = false; });
+
+document.querySelectorAll('[data-control]').forEach(button => {
+  const control = button.dataset.control;
+  const set = value => {
+    touchState[control] = value;
+    button.classList.toggle('active', value);
+  };
+
+  button.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
+    set(true);
+  });
+  button.addEventListener('pointerup', () => set(false));
+  button.addEventListener('pointercancel', () => set(false));
+  button.addEventListener('pointerleave', () => set(false));
+});
 
 const clock = new THREE.Clock();
 const velocity = new THREE.Vector3();
+const previousPosition = new THREE.Vector3();
+const carBounds = { x: 1.0, z: 2.0 };
+
+function isBlocked(position) {
+  for (const building of buildings) {
+    const dx = Math.abs(position.x - building.mesh.position.x);
+    const dz = Math.abs(position.z - building.mesh.position.z);
+    if (dx < building.halfX + carBounds.x && dz < building.halfZ + carBounds.z) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function updateCar(dt) {
-  const throttle = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
-  const steer = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+  const throttle =
+    (keys.KeyW || keys.ArrowUp || touchState.accelerate ? 1 : 0) -
+    (keys.KeyS || keys.ArrowDown || touchState.reverse ? 1 : 0);
+
+  const steer =
+    (keys.KeyA || keys.ArrowLeft || touchState.left ? -1 : 0) +
+    (keys.KeyD || keys.ArrowRight || touchState.right ? 1 : 0);
 
   const acceleration = 18;
   const maxSpeed = 20;
@@ -123,20 +177,36 @@ function updateCar(dt) {
   velocity.z = THREE.MathUtils.clamp(velocity.z, -reverseSpeed, maxSpeed);
 
   const direction = velocity.z >= 0 ? 1 : -1;
-  car.rotation.y += steer * direction * 1.7 * dt * Math.min(Math.abs(velocity.z) / 6, 1);
+  const steeringStrength = Math.min(Math.abs(velocity.z) / 6, 1);
+  car.rotation.y += steer * direction * 1.7 * dt * steeringStrength;
 
   const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
+  previousPosition.copy(car.position);
   car.position.addScaledVector(forward, velocity.z * dt);
 
-  car.position.x = THREE.MathUtils.clamp(car.position.x, -112, 112);
-  car.position.z = THREE.MathUtils.clamp(car.position.z, -112, 112);
+  if (isBlocked(car.position)) {
+    car.position.copy(previousPosition);
+    velocity.z *= -0.18;
+  }
+
+  car.position.x = THREE.MathUtils.clamp(car.position.x, -118, 118);
+  car.position.z = THREE.MathUtils.clamp(car.position.z, -118, 118);
+
+  const wheelRotation = velocity.z * dt / 0.36;
+  for (const wheel of wheels) {
+    wheel.rotateX(wheelRotation);
+  }
 }
 
 function updateCamera() {
-  const desired = new THREE.Vector3(0, 5.5, -9).applyQuaternion(car.quaternion).add(car.position);
-  camera.position.lerp(desired, 0.08);
+  const desired = new THREE.Vector3(0, 5.5, -9)
+    .applyQuaternion(car.quaternion)
+    .add(car.position);
+  camera.position.lerp(desired, 0.1);
 
-  const target = new THREE.Vector3(0, 1, 3).applyQuaternion(car.quaternion).add(car.position);
+  const target = new THREE.Vector3(0, 1, 2.8)
+    .applyQuaternion(car.quaternion)
+    .add(car.position);
   camera.lookAt(target);
 }
 
