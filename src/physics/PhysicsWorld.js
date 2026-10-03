@@ -104,7 +104,7 @@ export class PhysicsWorld {
     );
     const collider = this.world.createCollider(
       RAPIER.ColliderDesc.cuboid(0.92, 0.65, 1.82)
-        .setDensity(650)
+        .setDensity(160)
         .setFriction(1.1)
         .setRestitution(0.05),
       body
@@ -158,39 +158,17 @@ export class PhysicsWorld {
   solveVehicle(vehicle, dt) {
     const d = vehicle?.dynamics;
     if (!d) return;
+
     const body = vehicle.body;
     const p = body.translation();
     const r = body.rotation();
-    const forward = quatForward(r);
-    const right = { x: -forward.z, y: 0, z: forward.x };
     const velocity = body.linvel();
-    const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z;
-    const lateralSpeed = velocity.x * right.x + velocity.z * right.z;
-
-    const engine = d.throttle * d.engineForce;
-    const brake = d.brake * d.brakeForce + (d.handbrake ? d.handbrakeForce : 0);
-    let longitudinal = engine;
-    if (d.brake > 0 && forwardSpeed > 0.25) longitudinal -= Math.min(brake, Math.abs(forwardSpeed) * d.mass / Math.max(dt, 1e-4));
-    else if (d.brake > 0 && forwardSpeed <= 0.25) longitudinal -= d.brake * d.engineForce * 0.65;
-    const resistance = d.rollingResistance * forwardSpeed + d.airResistance * forwardSpeed * Math.abs(forwardSpeed);
-    longitudinal -= resistance;
-
-    const lateralForce = -lateralSpeed * d.lateralGrip * d.mass;
-    const accel = {
-      x: (forward.x * longitudinal + right.x * lateralForce) / d.mass,
-      y: 0,
-      z: (forward.z * longitudinal + right.z * lateralForce) / d.mass,
-    };
-    body.applyImpulse({ x: accel.x * d.mass * dt, y: 0, z: accel.z * d.mass * dt }, true);
-
-    const steerLimit = d.steeringMax * (1 - Math.min(1, Math.abs(forwardSpeed) / 22) * 0.35);
-    const steerAngle = d.steer * steerLimit;
-    const yawRate = Math.tan(steerAngle) * forwardSpeed / Math.max(d.wheelBase, 0.1);
-    body.setAngvel({ x: 0, y: yawRate * 0.85, z: body.angvel().z }, true);
-
-    const down = { x: 0, y: -1, z: 0 };
+    const angular = body.angvel();
+    const mass = d.mass;
     let contacts = 0;
-    d.wheels.forEach((wheel, i) => {
+
+    for (let i = 0; i < d.wheels.length; i++) {
+      const wheel = d.wheels[i];
       const local = wheel.local ?? { x: 0, y: -0.45, z: 0 };
       const offset = rotateLocal(r, local);
       const worldPos = {
@@ -198,19 +176,114 @@ export class PhysicsWorld {
         y: p.y + offset.y,
         z: p.z + offset.z,
       };
-      const ray = this.world.castRay(new RAPIER.Ray(worldPos, down), d.suspensionRest + d.suspensionTravel, true, undefined, undefined, vehicle.collider);
-      if (ray) {
-        const hit = ray.toi;
-        const compression = Math.max(0, Math.min(1, (d.suspensionRest - hit) / Math.max(d.suspensionTravel, 0.01)));
-        d.suspension[i].compression = compression;
-        d.suspension[i].contact = true;
-        contacts++;
-      } else {
-        d.suspension[i].compression = 0;
-        d.suspension[i].contact = false;
+
+      const ray = this.world.castRay(
+        new RAPIER.Ray(worldPos, { x: 0, y: -1, z: 0 }),
+        d.suspensionRest + d.suspensionTravel,
+        true,
+        undefined,
+        undefined,
+        vehicle.collider
+      );
+
+      const state = d.suspension[i];
+      if (!ray) {
+        state.compression = 0;
+        state.contact = false;
+        continue;
       }
-    });
+
+      const hit = ray.toi;
+      const compression = Math.max(
+        0,
+        Math.min(1, (d.suspensionRest - hit) / Math.max(d.suspensionTravel, 0.01))
+      );
+      state.compression = compression;
+      state.contact = true;
+      contacts++;
+
+      const pointVelocity = {
+        x: velocity.x + angular.y * offset.z - angular.z * offset.y,
+        y: velocity.y + angular.z * offset.x - angular.x * offset.z,
+        z: velocity.z + angular.x * offset.y - angular.y * offset.x,
+      };
+
+      const suspensionVelocity = pointVelocity.y;
+      const springForce = d.spring * compression;
+      const damperForce = -d.damper * suspensionVelocity;
+      const suspensionForce = Math.max(0, springForce + damperForce);
+      body.applyImpulseAtPoint(
+        { x: 0, y: suspensionForce * dt, z: 0 },
+        worldPos,
+        true
+      );
+
+      const isFront = local.z < 0;
+      const steerAngle = isFront ? d.steer * d.steeringMax : 0;
+      const wheelForwardLocal = {
+        x: Math.sin(steerAngle),
+        y: 0,
+        z: -Math.cos(steerAngle),
+      };
+      const wheelRightLocal = {
+        x: Math.cos(steerAngle),
+        y: 0,
+        z: Math.sin(steerAngle),
+      };
+      const wheelForward = rotateLocal(r, wheelForwardLocal);
+      const wheelRight = rotateLocal(r, wheelRightLocal);
+
+      const longSpeed =
+        pointVelocity.x * wheelForward.x +
+        pointVelocity.z * wheelForward.z;
+      const lateralSpeed =
+        pointVelocity.x * wheelRight.x +
+        pointVelocity.z * wheelRight.z;
+
+      const wheelCount = Math.max(1, d.wheels.length);
+      let longitudinalForce = d.throttle * d.engineForce / wheelCount;
+      if (d.brake > 0) {
+        longitudinalForce -= Math.sign(longSpeed || 1) * d.brake * d.brakeForce / wheelCount;
+      }
+      if (d.handbrake && !isFront) {
+        longitudinalForce -= Math.sign(longSpeed || 1) * d.handbrakeForce / wheelCount;
+      }
+
+      const lateralForce = -lateralSpeed * d.lateralGrip * mass / wheelCount;
+      const tireImpulse = {
+        x: (wheelForward.x * longitudinalForce + wheelRight.x * lateralForce) * dt,
+        y: 0,
+        z: (wheelForward.z * longitudinalForce + wheelRight.z * lateralForce) * dt,
+      };
+
+      body.applyImpulseAtPoint(tireImpulse, worldPos, true);
+    }
+
     d.grounded = contacts;
+
+    const planarSpeed = Math.hypot(velocity.x, velocity.z);
+    if (planarSpeed > 0.01) {
+      const resistance = d.rollingResistance * planarSpeed +
+        d.airResistance * planarSpeed * planarSpeed;
+      const dragImpulse = {
+        x: -velocity.x / planarSpeed * resistance * dt,
+        y: 0,
+        z: -velocity.z / planarSpeed * resistance * dt,
+      };
+      body.applyImpulse(dragImpulse, true);
+    }
+
+    if (contacts > 0) {
+      const forward = quatForward(r);
+      const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z;
+      const steerAngle = d.steer * d.steeringMax;
+      const yawRate = Math.tan(steerAngle) * forwardSpeed / Math.max(d.wheelBase, 0.1);
+      body.setAngvel({
+        x: angular.x * 0.55,
+        y: yawRate * 0.85,
+        z: angular.z * 0.55,
+      }, true);
+    }
   }
 
   setVehicleState(vehicle, { velocity, yaw, dt }) {
