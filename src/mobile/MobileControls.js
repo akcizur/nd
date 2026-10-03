@@ -47,8 +47,8 @@ export class MobileControls {
 
     addEventListener('resize', () => {
       const r = radius();
-      this.left.radius = r;
-      this.right.radius = r;
+      this.left.setRadius(r);
+      this.right.setRadius(r);
     });
   }
 }
