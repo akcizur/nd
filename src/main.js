@@ -477,6 +477,7 @@ async function start() {
   await loadCharacters();
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
   hudObjective.textContent = 'Ready · PLAY';
+  mainMenu.show();
   animate();
 }
 
