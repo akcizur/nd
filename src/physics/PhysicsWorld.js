@@ -131,6 +131,10 @@ export class PhysicsWorld {
     this.syncObject(object, physicsObject);
   }
 
+  setCharacterEnabled(character, enabled) {
+    character?.body.setEnabled(enabled);
+  }
+
   step() {
     this.world.step();
   }
