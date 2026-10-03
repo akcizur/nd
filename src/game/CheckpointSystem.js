@@ -7,5 +7,6 @@ export class CheckpointSystem {
     this.marker.rotation.x=Math.PI/2; scene.add(this.marker); this.sync();
   }
   sync(){ if(!this.points.length){this.marker.visible=false;return;} this.marker.visible=true; this.marker.position.copy(this.points[this.index]); }
+  reset(){ this.index=0; this.score=0; this.sync(); }
   update(position){ if(!this.marker.visible)return false; if(position.distanceTo(this.marker.position)<2.8){this.score+=100; this.index++; if(this.index>=this.points.length){this.marker.visible=false;return true;} this.sync();} return false; }
 }
