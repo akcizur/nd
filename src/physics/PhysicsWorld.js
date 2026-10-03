@@ -5,6 +5,18 @@ const quatForward = q => ({
   z: -(1 - 2 * (q.x * q.x + q.y * q.y)),
 });
 
+const rotateLocal = (q, v) => {
+  const ix = q.w * v.x + q.y * v.z - q.z * v.y;
+  const iy = q.w * v.y + q.z * v.x - q.x * v.z;
+  const iz = q.w * v.z + q.x * v.y - q.y * v.x;
+  const iw = -q.x * v.x - q.y * v.y - q.z * v.z;
+  return {
+    x: ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y,
+    y: iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z,
+    z: iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x,
+  };
+};
+
 import RAPIER from '@dimforge/rapier3d-compat';
 
 export class PhysicsWorld {
@@ -180,10 +192,11 @@ export class PhysicsWorld {
     let contacts = 0;
     d.wheels.forEach((wheel, i) => {
       const local = wheel.local ?? { x: 0, y: -0.45, z: 0 };
+      const offset = rotateLocal(r, local);
       const worldPos = {
-        x: p.x + local.x,
-        y: p.y + local.y,
-        z: p.z + local.z,
+        x: p.x + offset.x,
+        y: p.y + offset.y,
+        z: p.z + offset.z,
       };
       const ray = this.world.castRay(new RAPIER.Ray(worldPos, down), d.suspensionRest + d.suspensionTravel, true, undefined, undefined, vehicle.collider);
       if (ray) {
