@@ -127,9 +127,6 @@ const GOBKIT_URLS = [
 ];
 
 let player = null;
-let playerMixer = null;
-const playerActions = {};
-let playerState = 'Idle';
 let playerAnimation = null;
 let playerController = null;
 let vehicleController = null;
@@ -139,6 +136,8 @@ let physicsWorld = null;
 let inVehicle = false;
 let interactLocked = false;
 let gameplay = null;
+let playerPhysics = null;
+let vehiclePhysics = null;
 
 async function loadPlayer() {
   const gltf = await loader.loadAsync(SOLDIER_URL);
@@ -152,24 +151,8 @@ async function loadPlayer() {
     }
   });
   world.add(player);
-  playerMixer = new THREE.AnimationMixer(player);
   playerAnimation = new AnimationSystem(player);
-  playerAnimation.bind(playerMixer, gltf.animations);
-  for (const clip of gltf.animations) {
-    if (['Idle', 'Walk', 'Run'].includes(clip.name)) {
-      playerActions[clip.name] = playerMixer.clipAction(clip);
-    }
-  }
-  playPlayerAnimation('Idle');
-}
-
-function playPlayerAnimation(name) {
-  if (!playerMixer || !playerActions[name] || playerState === name) return;
-  const next = playerActions[name];
-  const current = playerActions[playerState];
-  if (current) current.fadeOut(0.18);
-  next.reset().fadeIn(0.18).play();
-  playerState = name;
+  playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations);
 }
 
 const npcs = [];
@@ -274,8 +257,8 @@ function closeSettings() {
 function enterPlay() {
   if (!player || !car) return;
   cameraSystem ||= new CameraSystem(camera);
-  playerController ||= new PlayerController({ object: player, input: input.input, collisionTest: blocked, camera: cameraSystem });
-  vehicleController ||= new VehicleController({ object: car, wheels, input: input.input, collisionTest: blocked });
+  playerController ||= new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
+  vehicleController ||= new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
   settingsMenu.hide();
@@ -296,11 +279,10 @@ function restartGame() {
   if (!player) return;
   cameraSystem && (cameraSystem.yaw = 0, cameraSystem.pitch = .28);
   vehicleController && (vehicleController.speed = 0);
-  player.position.set(0, 0, 1);
+  physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
+  physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
   player.rotation.set(0, 0, 0);
   player.visible = true;
-  car.position.set(0, 0, 5);
-  car.rotation.set(0, 0, 0);
   car.userData.speed = 0;
   inVehicle = false;
   document.body.classList.remove('vehicle-mode');
@@ -355,7 +337,7 @@ function enterVehicle() {
   inVehicle = true;
   gameplay?.enterVehicle();
   player.visible = false;
-  player.position.copy(car.position);
+  physicsWorld?.resetObject(player, playerPhysics, car.position.clone(), car.rotation.y);
   car.userData.speed = 0;
   hudObjective.textContent = 'Vehicle · řízení aktivní';
   hudHint.textContent = 'WASD / šipky · E = vystoupit';
@@ -372,7 +354,7 @@ function exitVehicle() {
     side.multiplyScalar(-1);
     exitPosition.copy(car.position).add(side);
   }
-  player.position.copy(exitPosition);
+  physicsWorld?.resetObject(player, playerPhysics, exitPosition, car.rotation.y);
   gameplay?.exitVehicle(exitPosition);
   player.rotation.y = car.rotation.y;
   player.visible = true;
@@ -447,6 +429,7 @@ const clock = new THREE.Clock();
 async function start() {
   hudObjective.textContent = 'Loading city…';
   physicsWorld = await PhysicsWorld.create();
+  physicsWorld.addGround(320);
   for (const box of collisionBoxes) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -454,8 +437,12 @@ async function start() {
   }
   await loadCharacters();
   cameraSystem = new CameraSystem(camera);
-  playerController = new PlayerController({ object: player, input: input.input, collisionTest: blocked, camera: cameraSystem });
-  vehicleController = new VehicleController({ object: car, wheels, input: input.input, collisionTest: blocked });
+  playerController = new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
+  vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
+  playerPhysics = physicsWorld.createCharacter(player);
+  vehiclePhysics = physicsWorld.createVehicle(car);
+  playerController.bindPhysics(playerPhysics);
+  vehicleController.bindPhysics(vehiclePhysics);
   checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
   hudObjective.textContent = 'Ready · PLAY';
@@ -468,10 +455,12 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   input.update();
   if (gameState.current === GameState.PLAYING) {
-    physicsWorld?.step();
-    playerAnimation?.update(dt);
     updatePlayer(dt);
     updateVehicle(dt);
+    physicsWorld?.step();
+    if (!inVehicle) physicsWorld?.syncObject(player, playerPhysics);
+    if (inVehicle) vehicleController?.syncFromPhysics();
+    playerAnimation?.update(dt);
     updateNpcs(dt);
     updateInteractionHud();
     const missionPosition = inVehicle ? car.position : player.position;
