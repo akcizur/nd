@@ -304,6 +304,7 @@ function restartGame() {
   playerController && (playerController.velocityY = 0, playerController.grounded = true);
   physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
   vehicleController && (vehicleController.speed = 0, vehicleController.yaw = 0);
+  checkpoints?.reset();
   player.rotation.set(0, 0, 0);
   player.visible = true;
   car.userData.speed = 0;
