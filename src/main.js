@@ -152,9 +152,34 @@ let vehiclePhysics = null;
 let universalAnimations = [];
 
 async function loadPlayer() {
-  // Keep the original, proven player model. The Universal Character Pack
-  // remains available for NPCs, but the player stays on the earlier Soldier
-  // model and animation set for reliable locomotion.
+  // Prefer the ready-made Quaternius CC0 humanoid + Universal Animation
+  // Library. The rig is shared with the animation pack, so clips can be
+  // retargeted by bone/node name without Blender or paid tooling.
+  try {
+    const gltf = await characterPack.loadUniversal();
+    const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
+    if (!clips.length) throw new Error('Universal Animation Library returned no compatible clips');
+
+    player = gltf.scene;
+    player.scale.setScalar(0.92);
+  player.position.set(0, 0, 1);
+  player.traverse(node => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+  world.add(player);
+
+    playerAnimation = new AnimationSystem(player);
+    playerAnimation.bind(new THREE.AnimationMixer(player), clips);
+    playerAnimation.play('idle', 0);
+    console.info('Player asset: Quaternius Universal Base + Universal Animation Library', clips.length);
+    return;
+  } catch (error) {
+    console.warn('Quaternius player package failed; falling back to Soldier:', error);
+  }
+
   const gltf = await loader.loadAsync(SOLDIER_URL);
   player = gltf.scene;
   player.scale.setScalar(1.05);
@@ -237,6 +262,15 @@ async function loadNpc(url, position, universal = false) {
 }
 
 async function loadCharacters() {
+  try {
+    const animationGltf = await characterPack.loadAnimationLibrary();
+    universalAnimations = animationGltf.animations || [];
+    console.info('Quaternius UAL loaded:', universalAnimations.length, 'clips');
+  } catch (error) {
+    console.warn('Universal Animation Library failed:', error);
+    universalAnimations = [];
+  }
+
   await loadPlayer();
   await loadBuildings();
   await Promise.all([
