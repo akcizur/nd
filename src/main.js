@@ -532,12 +532,14 @@ async function start() {
   hudObjective.textContent = 'Loading city…';
   physicsWorld = await PhysicsWorld.create();
   physicsWorld.addGround(320);
+  // Load pack geometry first: loadBuildings() replaces the procedural layout
+  // and rebuilds collisionBoxes. Physics colliders must be created afterwards.
+  await loadCharacters();
   for (const box of collisionBoxes) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    physicsWorld.addStaticBox(center.x, center.y, center.z, size.x, size.y, size.z);
+    physicsWorld.addStaticBox(center.x, center.y + size.y / 2, center.z, size.x, size.y, size.z);
   }
-  await loadCharacters();
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
   playerController = new PlayerController({ object: player, input: input.input, camera: cameraSystem, physics: physicsWorld });
