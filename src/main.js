@@ -437,6 +437,24 @@ const hudObjective = document.querySelector('#objective');
 const hudSpeed = document.querySelector('#speed');
 const hudHint = document.querySelector('#hint');
 
+const controlLabel = action => {
+  const codes = input.bindings[action] || [];
+  const labels = codes.map(code => ({
+    KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D',
+    ArrowUp: '↑', ArrowLeft: '←', ArrowDown: '↓', ArrowRight: '→',
+    ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', Space: 'SPACE',
+    KeyC: 'C', KeyE: 'E', Escape: 'ESC',
+  }[code] || code)).slice(0, 2);
+  return labels.join('/');
+};
+
+const movementHint = () => [
+  controlLabel('moveForward'),
+  controlLabel('moveLeft'),
+  controlLabel('moveBackward'),
+  controlLabel('moveRight'),
+].join('/') + ' · ' + controlLabel('sprint') + ' = běh · ' + controlLabel('interact') + ' = auto';
+
 function blocked(position, radius = 0.42, height = 1.9) {
   const playerBox = new THREE.Box3(
     new THREE.Vector3(position.x - radius, 0, position.z - radius),
@@ -470,7 +488,7 @@ function enterVehicle() {
   physicsWorld?.setCharacterEnabled(playerPhysics, false);
   car.userData.speed = 0;
   hudObjective.textContent = 'Vehicle · řízení aktivní';
-  hudHint.textContent = 'WASD / šipky · E = vystoupit';
+  hudHint.textContent = movementHint() + ' · vystoupit';
   document.body.classList.add('vehicle-mode');
   mobileControls.setVehicleMode(true);
   setTimeout(() => { interactLocked = false; }, 180);
@@ -492,7 +510,7 @@ function exitVehicle() {
   inVehicle = false;
   car.userData.speed = 0;
   hudObjective.textContent = 'Player ready · Chůze / běh';
-  hudHint.textContent = 'WASD / šipky · Shift = běh · E = nastoupit';
+  hudHint.textContent = movementHint() + ' · nastoupit';
   document.body.classList.remove('vehicle-mode');
   mobileControls.setVehicleMode(false);
   playerController?.resetMovement();
@@ -550,10 +568,10 @@ function updateInteractionHud() {
   if (inVehicle) return;
   if (nearCar()) {
     hudObjective.textContent = 'E · nastoupit do auta';
-    hudHint.textContent = 'E / dotykové tlačítko · nastoupit';
+    hudHint.textContent = controlLabel('interact') + ' / dotykové tlačítko · nastoupit';
   } else {
     hudObjective.textContent = 'Volný pohyb městem';
-    hudHint.textContent = 'WASD / šipky · Shift = běh · přibliž se k autu';
+    hudHint.textContent = movementHint() + ' · přibliž se k autu';
   }
 }
 
