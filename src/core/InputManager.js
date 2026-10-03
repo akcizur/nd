@@ -7,7 +7,6 @@ export class InputManager {
   }
 
   update() { this.router.update(); }
-
   setMove(x, y) { this.router.setMove(x, y); }
   setCamera(x, y) { this.router.setLook(x, y); }
   setAction(name, value = true) { this.router.setAction(name, value); }
@@ -18,14 +17,8 @@ export class InputManager {
   setControlSettings(settings) { return this.router.setSettings(settings); }
   resetControlSettings() { return this.router.resetSettings(); }
 
-  get controlSettings() {
-    return { ...this.router.settings };
-  }
-
-  get bindings() {
-    return structuredClone(this.router.bindings);
-  }
-
+  get controlSettings() { return { ...this.router.settings }; }
+  get bindings() { return structuredClone(this.router.bindings); }
   get move() { return this.input.move.clone(); }
   get cameraInput() { return this.input.look.clone(); }
   get run() { return this.input.sprint; }
