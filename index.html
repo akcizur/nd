@@ -2,12 +2,22 @@
 <html lang="cs">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#87ceeb" />
     <title>ND — Three.js</title>
   </head>
   <body>
     <div id="app"></div>
+    <div class="controls" aria-label="Ovládání vozidla">
+      <div class="controls__cluster">
+        <button class="control" data-control="left" aria-label="Doleva">←</button>
+        <button class="control" data-control="right" aria-label="Doprava">→</button>
+      </div>
+      <div class="controls__cluster">
+        <button class="control" data-control="reverse" aria-label="Couvat">↓</button>
+        <button class="control" data-control="accelerate" aria-label="Jet vpřed">↑</button>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
