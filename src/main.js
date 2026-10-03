@@ -508,9 +508,25 @@ function updatePlayer(dt) {
   if (!player || inVehicle || !playerController) return;
   playerController.update(dt);
   const state = playerController.state;
-  const animationMap = { idle:'idle', walk:'walk', run:'run', sprint:'run', crouch:'walk', jump:'run', fall:'run' };
-  playerAnimation?.play(animationMap[state] || 'idle');
-  hudSpeed.textContent = state.toUpperCase() + ' · ' + Math.round((playerController.input.move.length()) * (state === 'sprint' ? 8 : state === 'run' ? 6.2 : 3.8) * 10) / 10 + ' m/s';
+  const speed = Math.hypot(
+    playerController.horizontalVelocity.x,
+    playerController.horizontalVelocity.z
+  );
+  const maxSpeed = playerController.input.sprint
+    ? playerController.sprintSpeed
+    : playerController.runSpeed;
+
+  // Animation follows physical velocity, not the raw key/joystick state.
+  // This makes acceleration, braking and sprint transitions visibly dynamic.
+  playerAnimation?.updateLocomotion({
+    speed,
+    maxSpeed,
+    grounded: playerController.grounded,
+    dt,
+  });
+
+  hudSpeed.textContent = state.toUpperCase() + ' · ' +
+    Math.round(speed * 10) / 10 + ' m/s';
 }
 
 function updateVehicle(dt) {
