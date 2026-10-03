@@ -153,25 +153,53 @@ let citySimulation = null;
 
 let universalAnimations = [];
 
+function configurePlayerObject(model, scale = 1) {
+  model.scale.setScalar(scale);
+  model.position.set(0, 0, 1);
+  model.traverse(node => {
+    if (node.isMesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+  world.add(model);
+}
+
+function createFallbackPlayer() {
+  const root = new THREE.Group();
+  root.name = 'FallbackPlayer';
+
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.28, 0.92, 6, 10),
+    new THREE.MeshStandardMaterial({ color: 0x3b4652, roughness: 0.78 })
+  );
+  body.position.y = 0.72;
+  body.castShadow = true;
+  root.add(body);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 16, 12),
+    new THREE.MeshStandardMaterial({ color: 0xd2a37b, roughness: 0.92 })
+  );
+  head.position.y = 1.44;
+  head.castShadow = true;
+  root.add(head);
+
+  configurePlayerObject(root, 1);
+  playerAnimation = null;
+  console.warn('Player asset fallback: procedural humanoid');
+}
+
 async function loadPlayer() {
   // Prefer the ready-made Quaternius CC0 humanoid + Universal Animation
-  // Library. The rig is shared with the animation pack, so clips can be
-  // retargeted by bone/node name without Blender or paid tooling.
+  // Library. Runtime never depends on this package being reachable.
   try {
     const gltf = await characterPack.loadUniversal();
     const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
     if (!clips.length) throw new Error('Universal Animation Library returned no compatible clips');
 
     player = gltf.scene;
-    player.scale.setScalar(0.92);
-  player.position.set(0, 0, 1);
-  player.traverse(node => {
-    if (node.isMesh) {
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
-  });
-  world.add(player);
+    configurePlayerObject(player, 0.92);
 
     playerAnimation = new AnimationSystem(player);
     playerAnimation.bind(new THREE.AnimationMixer(player), clips);
@@ -182,21 +210,21 @@ async function loadPlayer() {
     console.warn('Quaternius player package failed; falling back to Soldier:', error);
   }
 
-  const gltf = await loader.loadAsync(SOLDIER_URL);
-  player = gltf.scene;
-  player.scale.setScalar(1.05);
-  player.position.set(0, 0, 1);
-  player.traverse(node => {
-    if (node.isMesh) {
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
-  });
-  world.add(player);
+  try {
+    const gltf = await loader.loadAsync(SOLDIER_URL);
+    player = gltf.scene;
+    configurePlayerObject(player, 1.05);
 
-  playerAnimation = new AnimationSystem(player);
-  playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations);
-  playerAnimation.play('Idle', 0);
+    playerAnimation = new AnimationSystem(player);
+    playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations);
+    playerAnimation.play('Idle', 0);
+    console.info('Player asset: Three.js Soldier fallback');
+    return;
+  } catch (error) {
+    console.warn('Soldier fallback failed; using procedural player:', error);
+  }
+
+  createFallbackPlayer();
 }
 
 async function loadBuildings() {
@@ -642,7 +670,7 @@ async function start() {
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
   playerController = new PlayerController({
-  object: player,
+    object: player,
   input: input.input,
   camera: cameraSystem,
   physics: physicsWorld,
