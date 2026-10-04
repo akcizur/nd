@@ -156,71 +156,65 @@ export class AnimationSystem {
     if (!this.mixer || !this.actions.idle) return;
 
     const normalized = Math.max(0, Math.min(1, speed / Math.max(0.01, maxSpeed)));
-    const smoothing = 1 - Math.exp(-10 * dt);
-    const directional = this._directionAction(forward, strafe);
-    const base = crouched ? (this.actions.crouch || directional) : directional;
+    const smoothing = 1 - Math.exp(-12 * dt);
 
-    for (const key of ['forward', 'backward', 'left', 'right', 'forwardLeft', 'forwardRight', 'backwardLeft', 'backwardRight']) {
-      const action = this.actions[key];
-      if (!action) continue;
-      const target = base && grounded && speed > 0.05 && action === base
-        ? Math.min(1, normalized * 1.4)
-        : 0;
-      action.enabled = true;
-      action.weight += (target - action.weight) * smoothing;
+    // Prefer the canonical locomotion clips. Directional clips are used only
+    // when the pack does not provide a normal walk/run set; otherwise a
+    // directional alias can accidentally mask the reliable base locomotion.
+    const walk = this.actions.walk || null;
+    const run = this.actions.run || walk;
+    const sprint = this.actions.sprint || run;
+
+    let target = 'idle';
+    if (!grounded) {
+      target = speed > 0.05
+        ? (this.actions.jump ? 'jump' : (this.actions.fall ? 'fall' : 'idle'))
+        : (this.actions.fall ? 'fall' : (this.actions.jump ? 'jump' : 'idle'));
+    } else if (crouched) {
+      target = this.actions.crouch ? 'crouch' : (walk ? 'walk' : 'idle');
+    } else if (normalized >= 0.78 && sprint) {
+      target = 'sprint';
+    } else if (normalized >= 0.05 && walk) {
+      target = normalized >= 0.58 && run ? 'run' : 'walk';
+    }
+
+    const resolved = this._resolve(target) || this._resolve('idle');
+    if (resolved) {
+      const next = this.actions[resolved];
+      const current = this.actions[this.state];
+
+      if (current !== next) {
+        if (current) current.fadeOut(Math.min(0.18, dt * 4));
+        next.reset().fadeIn(Math.min(0.18, dt * 4)).play();
+        this.state = resolved;
+      } else if (!next.isRunning()) {
+        next.play();
+      }
+
+      next.enabled = true;
+      next.weight += (1 - next.weight) * smoothing;
+    }
+
+    // Keep all non-selected locomotion actions silent. This avoids two clips
+    // fighting over the same skeleton, which is especially important for
+    // retargeted GLTF tracks.
+    const selected = this.actions[this.state];
+    const uniqueActions = new Set(Object.values(this.actions).filter(Boolean));
+    for (const action of uniqueActions) {
+      if (action === selected) continue;
+      action.weight += (0 - action.weight) * smoothing;
       if (action.weight < 0.001) action.enabled = false;
     }
 
-    const idle = this.actions.idle;
-    const walk = this.actions.walk || this.actions.run || this.actions.sprint;
-    const run = this.actions.run || walk;
-    const sprint = this.actions.sprint || run;
-    const airAction = !grounded ? (this.actions.jump || this.actions.fall) : null;
-
-    const walkZone = Math.min(1, normalized * 2);
-    const runZone = Math.max(0, (normalized - 0.5) * 2);
-    const targetIdle = !grounded ? 0 : Math.max(0, 1 - walkZone);
-    const targetWalk = !grounded || directional ? 0 : Math.max(0, walkZone - runZone);
-    const targetRun = !grounded || directional ? 0 : runZone;
-
-    const ensure = action => {
-      if (action && !action.isRunning()) action.reset().play();
-    };
-
-    ensure(idle);
-    ensure(walk);
-    ensure(run);
-    ensure(sprint);
-
-    idle.weight += (targetIdle - idle.weight) * smoothing;
-    if (walk) walk.weight += (targetWalk - walk.weight) * smoothing;
-    if (run && run !== sprint) run.weight += (targetRun - run.weight) * smoothing;
-
-    if (sprint && sprint !== run) {
-      const targetSprint = grounded && !directional ? runZone : 0;
-      sprint.weight += (targetSprint - sprint.weight) * smoothing;
-    }
-
-    if (airAction) {
-      ensure(airAction);
-      airAction.weight += (1 - airAction.weight) * smoothing;
-      airAction.enabled = airAction.weight > 0.001;
-    } else if (this.actions.jump || this.actions.fall) {
-      const air = this.actions.jump || this.actions.fall;
-      air.weight += (0 - air.weight) * smoothing;
-      air.enabled = air.weight > 0.001;
-    }
-
-    idle.enabled = idle.weight > 0.001;
-    if (walk) walk.enabled = walk.weight > 0.001;
-    if (run) run.enabled = run.weight > 0.001;
-
-    if (walk) walk.timeScale = Math.max(0.55, speed / 3.8);
-    if (run) run.timeScale = Math.max(0.65, speed / 6.2);
-    if (sprint) sprint.timeScale = Math.max(0.65, speed / 8.4);
-
-    for (const key of ['forward', 'backward', 'left', 'right', 'forwardLeft', 'forwardRight', 'backwardLeft', 'backwardRight']) {
-      if (this.actions[key]) this.actions[key].timeScale = Math.max(0.65, speed / 5.5);
+    if (selected) {
+      const rate = this.state === 'sprint'
+        ? Math.max(0.75, speed / 8.4)
+        : this.state === 'run'
+          ? Math.max(0.7, speed / 6.2)
+          : this.state === 'walk'
+            ? Math.max(0.7, speed / 3.8)
+            : 1;
+      selected.timeScale = rate;
     }
 
     this.locomotion.speed = speed;
@@ -228,16 +222,6 @@ export class AnimationSystem {
     this.locomotion.grounded = grounded;
     this.locomotion.direction = Math.atan2(strafe, forward);
     this.locomotion.blend += (normalized - this.locomotion.blend) * smoothing;
-
-    this.state = !grounded
-      ? (this.actions.jump ? 'jump' : 'fall')
-      : normalized < 0.03
-        ? 'idle'
-        : crouched
-          ? 'crouch'
-          : normalized < 0.62
-            ? 'walk'
-            : 'run';
   }
 
   setUpperBody(action) {
