@@ -57,6 +57,13 @@ export class AnimationSystem {
       if (/crouch|crouching/.test(key) && !this.actions.crouch) this.actions.crouch = action;
     }
 
+    if (!this.actions.idle) {
+      this.actions.idle = this.actions.stand || this.actions.breath || Object.values(this.actions)[0] || null;
+    }
+    if (!this.actions.walk) this.actions.walk = this.actions.run || null;
+    if (!this.actions.run) this.actions.run = this.actions.walk || null;
+    if (!this.actions.sprint) this.actions.sprint = this.actions.run || null;
+
     this._configureLooping();
     if (this.actions.idle) this.play('idle', 0);
   }
@@ -165,8 +172,8 @@ export class AnimationSystem {
     }
 
     const idle = this.actions.idle;
-    const walk = this.actions.walk;
-    const run = this.actions.run;
+    const walk = this.actions.walk || this.actions.run || this.actions.sprint;
+    const run = this.actions.run || walk;
     const sprint = this.actions.sprint || run;
     const airAction = !grounded ? (this.actions.jump || this.actions.fall) : null;
 
