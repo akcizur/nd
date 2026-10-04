@@ -9,7 +9,7 @@ export class CameraSystem {
     if (!subject) return;
     const look = input.look;
     if (look.lengthSq() > .0005) {
-      this.yaw += look.x * this.sensitivityX * dt * 3.2 * (this.invertX ? -1 : 1);
+      this.yaw -= look.x * this.sensitivityX * dt * 3.2 * (this.invertX ? -1 : 1);
       this.pitch = THREE.MathUtils.clamp(this.pitch + look.y * this.sensitivityY * dt * 2.1 * (this.invertY ? -1 : 1), -.15, .82);
     } else if (input.move.lengthSq() > .01) {
       // Camera yaw is the direction from the subject toward the camera.
