@@ -277,12 +277,25 @@ export class PhysicsWorld {
       const forward = quatForward(r);
       const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z;
       const steerAngle = d.steer * d.steeringMax;
-      const yawRate = Math.tan(steerAngle) * forwardSpeed / Math.max(d.wheelBase, 0.1);
+      // Three.js local -Z is forward. Positive steering (D/right) therefore
+      // produces a negative yaw rotation, i.e. turns the nose toward +X.
+      const yawRate = -Math.tan(steerAngle) * forwardSpeed / Math.max(d.wheelBase, 0.1);
       body.setAngvel({
         x: angular.x * 0.55,
         y: yawRate * 0.85,
         z: angular.z * 0.55,
       }, true);
+
+      const maxSpeed = forwardSpeed >= 0 ? d.maxForward : d.maxReverse;
+      const planar = Math.hypot(velocity.x, velocity.z);
+      if (planar > maxSpeed && maxSpeed > 0) {
+        const scale = maxSpeed / planar;
+        body.setLinvel({
+          x: velocity.x * scale,
+          y: velocity.y,
+          z: velocity.z * scale,
+        }, true);
+      }
     }
   }
 
