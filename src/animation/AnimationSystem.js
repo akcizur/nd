@@ -52,8 +52,8 @@ export class AnimationSystem {
       if (/walk|walking/.test(key) && !this.actions.walk) this.actions.walk = action;
       if (/run|running|jog/.test(key) && !this.actions.run) this.actions.run = action;
       if (/sprint/.test(key) && !this.actions.sprint) this.actions.sprint = action;
-      if (/jump/.test(key) && !this.actions.jump) this.actions.jump = action;
-      if (/fall/.test(key) && !this.actions.fall) this.actions.fall = action;
+      if (/jumpstart|jump/.test(key) && !this.actions.jump) this.actions.jump = action;
+      if (/jumploop|fall|airborne/.test(key) && !this.actions.fall) this.actions.fall = action;
       if (/crouch|crouching/.test(key) && !this.actions.crouch) this.actions.crouch = action;
     }
 
@@ -79,8 +79,8 @@ export class AnimationSystem {
       if (/walk|walking|locomotion/.test(key)) aliases.push('walk');
       if (/run|running|jog/.test(key)) aliases.push('run');
       if (/sprint/.test(key)) aliases.push('sprint');
-      if (/jump/.test(key)) aliases.push('jump');
-      if (/fall/.test(key)) aliases.push('fall');
+      if (/jumpstart|jump/.test(key)) aliases.push('jump');
+      if (/jumploop|fall|airborne/.test(key)) aliases.push('fall');
       if (/crouch|crouching/.test(key)) aliases.push('crouch');
       for (const alias of aliases) if (!this.actions[alias]) this.actions[alias] = this.mixer.clipAction(clip);
     }
