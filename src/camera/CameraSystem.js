@@ -12,7 +12,10 @@ export class CameraSystem {
       this.yaw += look.x * this.sensitivityX * dt * 3.2 * (this.invertX ? -1 : 1);
       this.pitch = THREE.MathUtils.clamp(this.pitch + look.y * this.sensitivityY * dt * 2.1 * (this.invertY ? -1 : 1), -.15, .82);
     } else if (input.move.lengthSq() > .01) {
-      const target = subject.rotation.y + Math.PI;
+      // Camera yaw is the direction from the subject toward the camera.
+      // Because the character faces local -Z, its own yaw is already the
+      // correct third-person follow angle.
+      const target = subject.rotation.y;
       const delta = THREE.MathUtils.euclideanModulo(target - this.yaw + Math.PI, Math.PI * 2) - Math.PI;
       this.yaw += delta * Math.min(1, dt * 2.2);
     }
