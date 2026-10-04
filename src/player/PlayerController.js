@@ -46,6 +46,12 @@ export class PlayerController {
 
     const move = this.input.move;
     const magnitude = Math.min(1, move.length());
+
+    // Keep the controller numerically stable when input arrives from keyboard,
+    // touch or a gamepad with a slightly noisy diagonal.
+    if (magnitude < 0.001) {
+      move.set(0, 0);
+    }
     const speed = this.input.sprint
       ? this.sprintSpeed
       : this.input.crouch
@@ -79,7 +85,9 @@ export class PlayerController {
     );
 
     if (magnitude > 0.05 && this.horizontalVelocity.lengthSq() > 0.001) {
-      const target = Math.atan2(this.horizontalVelocity.x, -this.horizontalVelocity.z);
+      // Three.js characters face local -Z. Convert world velocity to the yaw that
+      // makes -Z point exactly along the current movement vector.
+      const target = Math.atan2(-this.horizontalVelocity.x, -this.horizontalVelocity.z);
       const delta = THREE.MathUtils.euclideanModulo(
         target - this.object.rotation.y + Math.PI, Math.PI * 2
       ) - Math.PI;
