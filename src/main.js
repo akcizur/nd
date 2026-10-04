@@ -93,7 +93,6 @@ for (let x = -96; x <= 96; x += 24) {
   }
 }
 
-// Starter vehicle. E enters/exits when the player is nearby.
 const car = new THREE.Group();
 const carBody = new THREE.Mesh(
   new THREE.BoxGeometry(1.8, 0.55, 3.6),
@@ -190,8 +189,6 @@ function createFallbackPlayer() {
 }
 
 async function loadPlayer() {
-  // Prefer the ready-made Quaternius CC0 humanoid + Universal Animation
-  // Library. Runtime never depends on this package being reachable.
   try {
     const gltf = await characterPack.loadUniversal();
     const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
@@ -214,9 +211,6 @@ async function loadPlayer() {
   }
 
   try {
-    // Guaranteed same-rig fallback: the free UAL mannequin carries its own
-    // native clips, so it remains animated even if a remote character export
-    // changes its node paths.
     const animationGltf = await characterPack.loadAnimationLibrary();
     player = characterPack.clone(animationGltf, new THREE.Vector3(0, 0, 1), 0.92);
     configurePlayerObject(player, 1);
@@ -228,8 +222,6 @@ async function loadPlayer() {
   } catch (error) {
     console.warn('Native UAL player fallback failed; using procedural player:', error);
   }
-
-
 
   createFallbackPlayer();
 }
@@ -324,8 +316,6 @@ const systems = new SystemRegistry();
 const debug = new DebugOverlay({ enabled: new URLSearchParams(location.search).has('debug') });
 const gameState = new GameStateManager(GameState.MAIN_MENU);
 const mobileControls = new MobileControls(input);
-let cameraYaw = 0;
-let cameraPitch = 0.28;
 let settingsReturnState = GameState.MAIN_MENU;
 
 const mainMenu = new MainMenu({
@@ -419,38 +409,8 @@ function closeSettings() {
   }
 }
 
-function ensureRuntimeControllers() {
-  if (!cameraSystem) cameraSystem = new CameraSystem(camera);
-  applyCameraSettings();
-
-  if (!playerController && player) {
-    playerController = new PlayerController({
-      object: player,
-      input: input.input,
-      camera: cameraSystem,
-      physics: physicsWorld,
-      movementSettings,
-    });
-  }
-
-  if (!vehicleController && car) {
-    vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
-  }
-
-  if (playerController && physicsWorld && playerPhysics) {
-    playerController.physics = physicsWorld;
-    playerController.bindPhysics(playerPhysics);
-  }
-
-  if (vehicleController && physicsWorld && vehiclePhysics) {
-    vehicleController.physics = physicsWorld;
-    vehicleController.bindPhysics(vehiclePhysics);
-  }
-}
-
 function enterPlay() {
-  if (!player || !car) return;
-  ensureRuntimeControllers();
+  if (!player || !car || !cameraSystem || !playerController || !vehicleController) return;
   if (!inVehicle) physicsWorld?.setCharacterEnabled(playerPhysics, true);
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
@@ -608,9 +568,6 @@ function updatePlayer(dt) {
     ? playerController.sprintSpeed
     : playerController.runSpeed;
 
-  // Feed animation from actual physical velocity. The vector is projected
-  // into the character's local forward/right axes so UAL directional clips
-  // remain correct even when the camera and character face different ways.
   const forwardAxis = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
   const rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(player.quaternion);
   const velocity = playerController.horizontalVelocity;
@@ -664,13 +621,21 @@ function updateCamera(dt) {
   });
 }
 
-function updateInteractionHud() {
+function updateInteraction(dt) {
+  if (gameState.current !== GameState.PLAYING) return;
+  
   if (input.consume('interact')) toggleVehicle();
-  if (input.consume('pause') && gameState.current === GameState.PLAYING) {
+  if (input.consume('pause')) {
     gameState.set(GameState.PAUSED);
     gameMenu.open();
   }
-  if (inVehicle) return;
+  
+  if (inVehicle) {
+    hudObjective.textContent = 'Vehicle · řízení aktivní';
+    hudHint.textContent = movementHint() + ' · vystoupit';
+    return;
+  }
+  
   if (nearCar()) {
     hudObjective.textContent = 'E · nastoupit do auta';
     hudHint.textContent = controlLabel('interact') + ' / dotykové tlačítko · nastoupit';
@@ -685,18 +650,19 @@ async function start() {
   hudObjective.textContent = 'Loading city…';
   physicsWorld = await PhysicsWorld.create();
   physicsWorld.addGround(320);
-  // Load pack geometry first: loadBuildings() replaces the procedural layout
-  // and rebuilds collisionBoxes. Physics colliders must be created afterwards.
   await loadCharacters();
   citySimulation = new CitySimulation(world, { trafficCount: 16, pedestrianCount: 20 });
   citySimulation.init();
+  
   for (const box of collisionBoxes) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     physicsWorld.addStaticBox(center.x, center.y, center.z, size.x, size.y, size.z);
   }
+
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
+
   playerController = new PlayerController({
     object: player,
     input: input.input,
@@ -710,19 +676,23 @@ async function start() {
   vehiclePhysics = physicsWorld.createVehicle(car);
   playerController.bindPhysics(playerPhysics);
   vehicleController.bindPhysics(vehiclePhysics);
+  
   physicsWorld.step(1 / 60);
   physicsWorld.syncObject(player, playerPhysics);
   physicsWorld.syncObject(car, vehiclePhysics);
+  
   checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
+  
   systems.register('player-controller', { fixedUpdate: updatePlayer });
   systems.register('vehicle-controller', { fixedUpdate: updateVehicle });
   systems.register('animation', { update: dt => playerAnimation?.update(dt) });
   systems.register('npcs', { update: updateNpcs });
   systems.register('city-simulation', { update: dt => citySimulation?.update(dt) });
-  systems.register('interaction', { update: updateInteractionHud });
+  systems.register('interaction', { update: updateInteraction });
   systems.register('camera', { update: updateCamera });
   systems.register('debug', { update: dt => debug.update({ dt, gameState: gameState.current, player: playerPhysics, vehicle: vehiclePhysics, physics: physicsWorld, inVehicle }) });
+  
   hudObjective.textContent = 'Ready · PLAY';
   mainMenu.show();
   animate();
@@ -732,6 +702,7 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   input.update();
+  
   if (gameState.current === GameState.PLAYING) {
     physicsWorld?.step(dt, fixedDt => {
       systems.fixedUpdate(fixedDt);
@@ -742,6 +713,7 @@ function animate() {
     const missionPosition = inVehicle ? car.position : player.position;
     if (checkpoints?.update(missionPosition)) hudObjective.textContent = 'MISSION COMPLETE · FREE ROAM';
   }
+  
   renderer.render(scene, camera);
 }
 
