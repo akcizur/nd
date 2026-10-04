@@ -37,14 +37,55 @@ export class CharacterPackLoader {
   }
 
   retargetClips(clips, targetRoot) {
-    const names = new Set();
-    targetRoot.traverse(node => names.add(node.name));
+    // UAL and the base character use the same humanoid skeleton, but glTF
+    // exports may encode the source node as "Armature/pelvis", "Armature|pelvis"
+    // or simply "pelvis". Three.js needs the target node binding, not the
+    // exporter-specific path. Resolve every track to the actual target node.
+    const nodes = new Map();
+    const normalized = new Map();
+    const normalize = value => String(value || '')
+      .replace(/\\/g, '/')
+      .split('/')
+      .pop()
+      .split('|')
+      .pop()
+      .replace(/[^a-z0-9]/gi, '')
+      .toLowerCase();
+
+    targetRoot.traverse(node => {
+      if (!node.name) return;
+      nodes.set(node.name, node);
+      normalized.set(normalize(node.name), node);
+    });
+
+    const resolveTrack = trackName => {
+      const dot = trackName.lastIndexOf('.');
+      if (dot <= 0) return null;
+      const sourcePath = trackName.slice(0, dot);
+      const property = trackName.slice(dot + 1);
+      const sourceLeaf = sourcePath
+        .replace(/\\/g, '/')
+        .split('/')
+        .pop()
+        .split('|')
+        .pop();
+
+      const target = nodes.get(sourceLeaf) || normalized.get(normalize(sourceLeaf));
+      if (!target) return null;
+      return { target, name: target.name + '.' + property };
+    };
+
     return clips
       .filter(clip => clip?.tracks?.length)
       .map(clip => {
-        const tracks = clip.tracks
-          .filter(track => names.has(track.name.split('.')[0]))
-          .map(track => track.clone());
+        const tracks = [];
+        for (const track of clip.tracks) {
+          const binding = resolveTrack(track.name);
+          if (!binding) continue;
+          const next = track.clone();
+          next.name = binding.name;
+          tracks.push(next);
+        }
         if (!tracks.length) return null;
         return new THREE.AnimationClip(clip.name, clip.duration, tracks);
       })
