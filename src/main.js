@@ -196,7 +196,11 @@ async function loadPlayer() {
   try {
     const gltf = await characterPack.loadUniversal();
     const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
-    if (!clips.length) throw new Error('Universal Animation Library returned no compatible clips');
+    const hasIdle = clips.some(clip => /idle|stand|breath/i.test(clip.name));
+    const hasLocomotion = clips.some(clip => /walk|jog|run|sprint/i.test(clip.name));
+    if (!hasIdle || !hasLocomotion) {
+      throw new Error(`Universal Animation Library binding incomplete (idle=${hasIdle}, locomotion=${hasLocomotion}, clips=${clips.length})`);
+    }
 
     player = gltf.scene;
     configurePlayerObject(player, 0.92);
@@ -208,6 +212,22 @@ async function loadPlayer() {
     return;
   } catch (error) {
     console.warn('Quaternius player package failed; falling back to Soldier:', error);
+  }
+
+  try {
+    // Guaranteed same-rig fallback: the free UAL mannequin carries its own
+    // native clips, so it remains animated even if a remote character export
+    // changes its node paths.
+    const animationGltf = await characterPack.loadAnimationLibrary();
+    player = characterPack.clone(animationGltf, new THREE.Vector3(0, 0, 1), 0.92);
+    configurePlayerObject(player, 1);
+    playerAnimation = new AnimationSystem(player);
+    playerAnimation.bind(new THREE.AnimationMixer(player), animationGltf.animations || []);
+    playerAnimation.play('idle', 0);
+    console.info('Player asset: Quaternius UAL native animated fallback');
+    return;
+  } catch (error) {
+    console.warn('Native UAL player fallback failed; using Soldier:', error);
   }
 
   try {
