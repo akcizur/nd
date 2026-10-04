@@ -34,9 +34,20 @@ export class VehicleController {
   update(dt) {
     if (!this.physicsBody || !this.physics || !this.dynamics) return;
 
-    const throttle = Math.max(0, this.input.move.y);
-    const brake = Math.max(0, -this.input.move.y);
+    const requested = THREE.MathUtils.clamp(this.input.move.y, -1, 1);
     const steer = THREE.MathUtils.clamp(this.input.move.x, -1, 1);
+
+    // S/ArrowDown is a real reverse input. When changing direction while the
+    // car is moving, brake first; once nearly stopped the same input becomes
+    // reverse throttle.
+    const velocity = this.physicsBody.linvel();
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.object.quaternion);
+    const signedSpeed = velocity.x * forward.x + velocity.z * forward.z;
+    const changingDirection = Math.abs(signedSpeed) > 0.65 &&
+      requested !== 0 &&
+      Math.sign(requested) !== Math.sign(signedSpeed);
+    const throttle = changingDirection ? 0 : requested;
+    const brake = changingDirection ? Math.abs(requested) : 0;
 
     this.physics.setVehicleInput(this.physicsBody, {
       throttle,
@@ -45,9 +56,7 @@ export class VehicleController {
       handbrake: this.input.handbrake,
     });
 
-    const velocity = this.physicsBody.linvel();
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.object.quaternion);
-    this.speed = velocity.x * forward.x + velocity.z * forward.z;
+    this.speed = signedSpeed;
 
     this.steeringAngle = THREE.MathUtils.damp(
       this.steeringAngle,
