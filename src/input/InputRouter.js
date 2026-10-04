@@ -46,6 +46,11 @@ export class InputRouter {
     this._bindKeyboard();
     this._bindMouse();
     this._bindGamepad();
+
+    addEventListener('blur', () => this.clearHeldInput());
+    addEventListener('visibilitychange', () => {
+      if (document.hidden) this.clearHeldInput();
+    });
   }
 
   _bindKeyboard() {
@@ -119,6 +124,20 @@ export class InputRouter {
   clearBinding(action) {
     this.bindings[action] = [];
     this.save();
+  }
+
+  clearHeldInput() {
+    this.keys = Object.create(null);
+    this.mouseButtons = Object.create(null);
+    this.mouseLook = false;
+    this.mouseLookDelta.x = 0;
+    this.mouseLookDelta.y = 0;
+    this.touchMove.x = 0;
+    this.touchMove.y = 0;
+    this.touchLook.x = 0;
+    this.touchLook.y = 0;
+    this.manualActions = Object.create(null);
+    this.toggleActions = Object.create(null);
   }
 
   setMove(x, y) {
