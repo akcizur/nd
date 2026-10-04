@@ -24,14 +24,14 @@ export class AnimationSystem {
 
   _aliasDirectional(key, action) {
     const rules = [
-      ['forward', /forward|forwards/],
-      ['backward', /backward|backwards|back/],
-      ['left', /strafeleft|left/],
-      ['right', /straferight|right/],
-      ['forwardLeft', /forwardleft|leftforward/],
-      ['forwardRight', /forwardright|rightforward/],
-      ['backwardLeft', /backwardleft|leftbackward/],
-      ['backwardRight', /backwardright|rightbackward/],
+      ['forwardLeft', /^(?:forwardleft|leftforward|forwardstrafeleft|strafeleftforward)$/],
+      ['forwardRight', /^(?:forwardright|rightforward|forwardstraferight|straferightforward)$/],
+      ['backwardLeft', /^(?:backwardleft|leftbackward|backwardstrafeleft|strafeleftbackward)$/],
+      ['backwardRight', /^(?:backwardright|rightbackward|backwardstraferight|straferightbackward)$/],
+      ['forward', /^(?:forward|forwards)$/],
+      ['backward', /^(?:backward|backwards|back)$/],
+      ['left', /^(?:left|strafeleft)$/],
+      ['right', /^(?:right|straferight)$/],
     ];
     for (const [alias, pattern] of rules) {
       if (pattern.test(key) && !this.actions[alias]) this.actions[alias] = action;
@@ -153,14 +153,15 @@ export class AnimationSystem {
     const directional = this._directionAction(forward, strafe);
     const base = crouched ? (this.actions.crouch || directional) : directional;
 
-    if (base && grounded && speed > 0.05) {
-      for (const key of ['forward', 'backward', 'left', 'right', 'forwardLeft', 'forwardRight', 'backwardLeft', 'backwardRight']) {
-        const action = this.actions[key];
-        if (!action) continue;
-        const target = action === base ? Math.min(1, normalized * 1.4) : 0;
-        action.enabled = true;
-        action.weight += (target - action.weight) * smoothing;
-      }
+    for (const key of ['forward', 'backward', 'left', 'right', 'forwardLeft', 'forwardRight', 'backwardLeft', 'backwardRight']) {
+      const action = this.actions[key];
+      if (!action) continue;
+      const target = base && grounded && speed > 0.05 && action === base
+        ? Math.min(1, normalized * 1.4)
+        : 0;
+      action.enabled = true;
+      action.weight += (target - action.weight) * smoothing;
+      if (action.weight < 0.001) action.enabled = false;
     }
 
     const idle = this.actions.idle;
