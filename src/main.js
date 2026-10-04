@@ -130,7 +130,6 @@ world.add(car);
 const loader = new GLTFLoader();
 const characterPack = new CharacterPackLoader(loader);
 const buildingPack = new BuildingPackLoader(loader);
-const SOLDIER_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Soldier.glb';
 const GOBKIT_MODELS = [
   { url: 'https://gobkit.com/freebies/minion/minion-a01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
   { url: 'https://gobkit.com/freebies/minion/minion-b01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
@@ -211,7 +210,7 @@ async function loadPlayer() {
     console.info('Player asset: Quaternius Universal Base + Universal Animation Library', clips.length);
     return;
   } catch (error) {
-    console.warn('Quaternius player package failed; falling back to Soldier:', error);
+    console.warn('Quaternius player package failed; trying native UAL fallback:', error);
   }
 
   try {
@@ -227,22 +226,10 @@ async function loadPlayer() {
     console.info('Player asset: Quaternius UAL native animated fallback');
     return;
   } catch (error) {
-    console.warn('Native UAL player fallback failed; using Soldier:', error);
+    console.warn('Native UAL player fallback failed; using procedural player:', error);
   }
 
-  try {
-    const gltf = await loader.loadAsync(SOLDIER_URL);
-    player = gltf.scene;
-    configurePlayerObject(player, 1.05);
 
-    playerAnimation = new AnimationSystem(player);
-    playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations);
-    playerAnimation.play('Idle', 0);
-    console.info('Player asset: Three.js Soldier fallback');
-    return;
-  } catch (error) {
-    console.warn('Soldier fallback failed; using procedural player:', error);
-  }
 
   createFallbackPlayer();
 }
