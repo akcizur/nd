@@ -419,18 +419,39 @@ function closeSettings() {
   }
 }
 
+function ensureRuntimeControllers() {
+  if (!cameraSystem) cameraSystem = new CameraSystem(camera);
+  applyCameraSettings();
+
+  if (!playerController && player) {
+    playerController = new PlayerController({
+      object: player,
+      input: input.input,
+      camera: cameraSystem,
+      physics: physicsWorld,
+      movementSettings,
+    });
+  }
+
+  if (!vehicleController && car) {
+    vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
+  }
+
+  if (playerController && physicsWorld && playerPhysics) {
+    playerController.physics = physicsWorld;
+    playerController.bindPhysics(playerPhysics);
+  }
+
+  if (vehicleController && physicsWorld && vehiclePhysics) {
+    vehicleController.physics = physicsWorld;
+    vehicleController.bindPhysics(vehiclePhysics);
+  }
+}
+
 function enterPlay() {
   if (!player || !car) return;
+  ensureRuntimeControllers();
   if (!inVehicle) physicsWorld?.setCharacterEnabled(playerPhysics, true);
-  cameraSystem ||= new CameraSystem(camera);
-  playerController ||= new PlayerController({
-    object: player,
-    input: input.input,
-    camera: cameraSystem,
-    physics: physicsWorld,
-    movementSettings,
-  });
-  vehicleController ||= new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
   settingsMenu.hide();
@@ -678,11 +699,11 @@ async function start() {
   applyCameraSettings();
   playerController = new PlayerController({
     object: player,
-  input: input.input,
-  camera: cameraSystem,
-  physics: physicsWorld,
-  movementSettings,
-});
+    input: input.input,
+    camera: cameraSystem,
+    physics: physicsWorld,
+    movementSettings,
+  });
 
   vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   playerPhysics = physicsWorld.createCharacter(player);
