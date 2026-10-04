@@ -12,6 +12,12 @@ export class InputRouter {
 
     this.input = new GameplayInput();
     this.bindings = structuredClone(bindings || saved.bindings || DEFAULT_BINDINGS);
+
+    for (const action of ['moveForward', 'moveBackward', 'moveLeft', 'moveRight']) {
+      if (!Array.isArray(this.bindings[action]) || this.bindings[action].length === 0) {
+        this.bindings[action] = [...DEFAULT_BINDINGS[action]];
+      }
+    }
     this.settings = {
       sprintMode: saved.sprintMode,
       cameraRelativeMovement: saved.cameraRelativeMovement,
