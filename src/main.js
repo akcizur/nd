@@ -524,7 +524,7 @@ const movementHint = () => [
   controlLabel('moveLeft'),
   controlLabel('moveBackward'),
   controlLabel('moveRight'),
-].join('/') + ' · ' + controlLabel('sprint') + ' = běh · ' + controlLabel('interact') + ' = auto';
+].join('/') + ' · ' + controlLabel('sprint') + ' = běh · ' + controlLabel('jump') + ' = skok · RMB = kamera · ' + controlLabel('interact') + ' = auto';
 
 function blocked(position, radius = 0.42, height = 1.9) {
   const playerBox = new THREE.Box3(
