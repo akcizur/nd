@@ -148,7 +148,6 @@ let gameplay = null;
 let playerPhysics = null;
 let vehiclePhysics = null;
 let citySimulation = null;
-
 let universalAnimations = [];
 
 function configurePlayerObject(model, scale = 1) {
@@ -340,6 +339,7 @@ const movementSettings = {
   cameraRelativeMovement: input.controlSettings.cameraRelativeMovement,
   touchDeadzone: input.controlSettings.touchDeadzone,
 };
+
 const applyCameraSettings = () => {
   if (!cameraSystem) return;
   cameraSystem.sensitivityX = 1.8 * cameraSettings.sensitivity;
@@ -347,12 +347,14 @@ const applyCameraSettings = () => {
   cameraSystem.invertX = cameraSettings.invertX;
   cameraSystem.invertY = cameraSettings.invertY;
 };
+
 const applyMovementSettings = settings => {
   Object.assign(movementSettings, settings);
   input.setControlSettings(movementSettings);
   mobileControls.setTouchDeadzone(movementSettings.touchDeadzone);
   playerController?.setMovementSettings(movementSettings);
 };
+
 const settingsMenu = new SettingsMenu({
   onBack: () => closeSettings(),
   inputRouter: input,
@@ -409,6 +411,41 @@ function closeSettings() {
   }
 }
 
+function ensureRuntimeControllers() {
+  if (!cameraSystem) cameraSystem = new CameraSystem(camera);
+  applyCameraSettings();
+
+  if (!playerController && player) {
+    playerController = new PlayerController({
+      object: player,
+      input: input.input,
+      camera: cameraSystem,
+      physics: physicsWorld,
+      movementSettings,
+    });
+  }
+
+  if (!vehicleController && car) {
+    vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
+  }
+
+  if (playerController && physicsWorld && playerPhysics) {
+    playerController.physics = physicsWorld;
+    playerController.camera = cameraSystem;
+    playerController.bindPhysics(playerPhysics);
+  }
+
+  if (vehicleController && physicsWorld && vehiclePhysics) {
+    vehicleController.physics = physicsWorld;
+    vehicleController.bindPhysics(vehiclePhysics);
+  }
+}
+
+function syncRuntimeActors() {
+  if (playerPhysics) physicsWorld?.syncObject(player, playerPhysics);
+  if (vehiclePhysics) physicsWorld?.syncObject(car, vehiclePhysics);
+}
+
 function enterPlay() {
   if (!player || !car || !cameraSystem || !playerController || !vehicleController) return;
   if (!inVehicle) physicsWorld?.setCharacterEnabled(playerPhysics, true);
@@ -444,6 +481,7 @@ function restartGame() {
   inVehicle = false;
   document.body.classList.remove('vehicle-mode');
   mobileControls.setVehicleMode(false);
+  syncRuntimeActors();
   gameMenu.close();
   gameState.set(GameState.PLAYING);
 }
@@ -459,6 +497,7 @@ function returnToMainMenu() {
     document.body.classList.remove('vehicle-mode');
     mobileControls.setVehicleMode(false);
   }
+  syncRuntimeActors();
   gameMenu.close();
   gameMenu.button.classList.add('hidden');
   mobileControls.root.classList.add('hidden');
@@ -623,19 +662,19 @@ function updateCamera(dt) {
 
 function updateInteraction(dt) {
   if (gameState.current !== GameState.PLAYING) return;
-  
+
   if (input.consume('interact')) toggleVehicle();
   if (input.consume('pause')) {
     gameState.set(GameState.PAUSED);
     gameMenu.open();
   }
-  
+
   if (inVehicle) {
     hudObjective.textContent = 'Vehicle · řízení aktivní';
     hudHint.textContent = movementHint() + ' · vystoupit';
     return;
   }
-  
+
   if (nearCar()) {
     hudObjective.textContent = 'E · nastoupit do auta';
     hudHint.textContent = controlLabel('interact') + ' / dotykové tlačítko · nastoupit';
@@ -653,7 +692,7 @@ async function start() {
   await loadCharacters();
   citySimulation = new CitySimulation(world, { trafficCount: 16, pedestrianCount: 20 });
   citySimulation.init();
-  
+
   for (const box of collisionBoxes) {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -674,16 +713,15 @@ async function start() {
   vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
   playerPhysics = physicsWorld.createCharacter(player);
   vehiclePhysics = physicsWorld.createVehicle(car);
+
   playerController.bindPhysics(playerPhysics);
   vehicleController.bindPhysics(vehiclePhysics);
-  
   physicsWorld.step(1 / 60);
-  physicsWorld.syncObject(player, playerPhysics);
-  physicsWorld.syncObject(car, vehiclePhysics);
-  
+  syncRuntimeActors();
+
   checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
   gameplay = new MavonGameplayBridge({ player, vehicle: car });
-  
+
   systems.register('player-controller', { fixedUpdate: updatePlayer });
   systems.register('vehicle-controller', { fixedUpdate: updateVehicle });
   systems.register('animation', { update: dt => playerAnimation?.update(dt) });
@@ -692,7 +730,7 @@ async function start() {
   systems.register('interaction', { update: updateInteraction });
   systems.register('camera', { update: updateCamera });
   systems.register('debug', { update: dt => debug.update({ dt, gameState: gameState.current, player: playerPhysics, vehicle: vehiclePhysics, physics: physicsWorld, inVehicle }) });
-  
+
   hudObjective.textContent = 'Ready · PLAY';
   mainMenu.show();
   animate();
@@ -702,18 +740,18 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   input.update();
-  
+
   if (gameState.current === GameState.PLAYING) {
     physicsWorld?.step(dt, fixedDt => {
       systems.fixedUpdate(fixedDt);
     });
-    physicsWorld?.syncObject(player, playerPhysics);
+    syncRuntimeActors();
     vehicleController?.syncFromPhysics();
     systems.update(dt);
     const missionPosition = inVehicle ? car.position : player.position;
     if (checkpoints?.update(missionPosition)) hudObjective.textContent = 'MISSION COMPLETE · FREE ROAM';
   }
-  
+
   renderer.render(scene, camera);
 }
 
