@@ -94,7 +94,9 @@ export class VehicleController {
       const state = this.dynamics?.suspension[i];
       if (!state) continue;
       wheel.userData.suspension = state.compression;
-      wheel.userData.steer = (i < 2 ? this.steeringAngle : 0);
+      // Wheel mesh forward is local -Z, so mirror the physics steering angle
+      // for the visible wheel orientation.
+      wheel.userData.steer = (i < 2 ? -this.steeringAngle : 0);
       wheel.userData.lastSpin = (wheel.userData.lastSpin ?? wheel.rotation.x)
         - this.speed * (1 / 60) / 0.34;
 
