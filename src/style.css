@@ -183,6 +183,26 @@ button { -webkit-tap-highlight-color: transparent; }
 .mobile-zone--left { left: 0; }
 .mobile-zone--right { right: 0; }
 
+.mobile-stick-label {
+  position: absolute;
+  z-index: 2;
+  bottom: max(112px, calc(11vmin + 58px));
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 7px;
+  background: rgba(0,0,0,.32);
+  color: rgba(255,255,255,.42);
+  font: 800 8px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .12em;
+  pointer-events: none;
+}
+.mobile-stick-label--left {
+  left: max(24px, env(safe-area-inset-left));
+}
+.mobile-stick-label--right {
+  right: max(24px, env(safe-area-inset-right));
+}
+
 .virtual-joystick {
   position: fixed;
   width: 0;
@@ -511,37 +531,18 @@ body[data-game-state="PLAYING"] .game-controls {
 /* Touch devices: make the virtual controls visibly discoverable before first touch. */
 @media (hover: none), (pointer: coarse) {
   .virtual-joystick {
-    opacity: .42;
+    opacity: .55;
   }
 
   .virtual-joystick.active {
     opacity: 1;
   }
 
-  .mobile-zone--left::after,
-  .mobile-zone--right::after {
-    position: absolute;
-    bottom: max(22px, env(safe-area-inset-bottom));
-    padding: 5px 8px;
-    border: 1px solid rgba(255,255,255,.14);
-    border-radius: 7px;
-    background: rgba(0,0,0,.25);
-    color: rgba(255,255,255,.48);
-    font: 800 8px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: .1em;
+  .mobile-stick-label {
+    display: block;
   }
 
-  .mobile-zone--left::after {
-    content: "MOVE";
-    left: max(22px, env(safe-area-inset-left));
-  }
-
-  .mobile-zone--right::after {
-    content: "CAMERA";
-    right: max(22px, env(safe-area-inset-right));
-  }
-
-  .game-controls {
+    .game-controls {
     left: max(12px, env(safe-area-inset-left));
     bottom: max(12px, env(safe-area-inset-bottom));
     width: auto;
@@ -564,6 +565,10 @@ body[data-game-state="PLAYING"] .game-controls {
 @media (hover: hover) and (pointer: fine) {
   .game-controls {
     display: block;
+  }
+
+  .mobile-stick-label {
+    display: none;
   }
 }
 
