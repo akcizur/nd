@@ -598,6 +598,7 @@ function exitVehicle() {
 function updatePlayer(dt) {
   if (!player || inVehicle || !playerController) return;
   playerController.update(dt);
+
   const state = playerController.state;
   const speed = Math.hypot(
     playerController.horizontalVelocity.x,
@@ -607,18 +608,17 @@ function updatePlayer(dt) {
     ? playerController.sprintSpeed
     : playerController.runSpeed;
 
-  const forwardAxis = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
-  const rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(player.quaternion);
-  const velocity = playerController.horizontalVelocity;
-  const forwardAmount = velocity.dot(forwardAxis) / Math.max(0.001, speed);
-  const strafeAmount = velocity.dot(rightAxis) / Math.max(0.001, speed);
-
+  // Use the original control vector for animation. The controller rotates the
+  // character toward velocity, so using velocity here would erase backward and
+  // strafe intent.
+  const animationInput = playerController.animationInput;
   playerAnimation?.updateLocomotion({
     speed,
     maxSpeed,
     grounded: playerController.grounded,
-    forward: forwardAmount,
-    strafe: strafeAmount,
+    verticalVelocity: playerController.velocityY,
+    forward: animationInput.forward,
+    strafe: animationInput.strafe,
     crouched: Boolean(playerController.input.crouch),
     dt,
   });
