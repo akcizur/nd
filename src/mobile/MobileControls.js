@@ -33,6 +33,11 @@ export class MobileControls {
       onChange: (x, y) => input.setCamera(x, y),
     });
 
+    this.root.insertAdjacentHTML('afterbegin', `
+      <div class="mobile-stick-label mobile-stick-label--left">MOVE</div>
+      <div class="mobile-stick-label mobile-stick-label--right">CAMERA</div>
+    `);
+
     this.buttons = [...this.root.querySelectorAll('[data-action]')];
     for (const button of this.buttons) {
       const down = event => {
