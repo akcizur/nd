@@ -61,51 +61,86 @@ const loader = new GLTFLoader();
 const characterPack = new CharacterPackLoader(loader);
 
 let player = null;
+let playerVisual = null;
+let playerCollider = null;
 let playerAnimation = null;
 let playerController = null;
 let cameraSystem = null;
 let universalAnimations = [];
 
-function groundCharacter(model, scale = 0.92) {
+function createPlayerRig(model, scale = 0.92) {
+  const rig = new THREE.Group();
+  rig.name = 'PlayerCharacter';
+
+  // Invisible gameplay collider. The visible character never owns gameplay
+  // movement directly; the rig/capsule is the authoritative body.
+  const collider = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.34, 1.05, 8, 12),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  collider.name = 'PlayerCollisionCapsule';
+  collider.visible = false;
+  collider.position.y = 0.865;
+  rig.add(collider);
+
   model.scale.setScalar(scale);
   model.updateMatrixWorld(true);
 
   const bounds = new THREE.Box3().setFromObject(model);
-  model.position.set(0, -bounds.min.y + 0.01, 0);
-  model.updateMatrixWorld(true);
+  model.position.y = -bounds.min.y + 0.01;
 
+  // The selected playable model is the yellow character. Keep the model
+  // visually distinct while the collider remains completely invisible.
   model.traverse(node => {
     if (!node.isMesh) return;
     node.castShadow = true;
     node.receiveShadow = true;
+
+    if (node.material) {
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      node.material = materials.map(source => {
+        const material = source.clone();
+        if ('color' in material) material.color.set(0xffd21f);
+        if ('roughness' in material) material.roughness = Math.max(0.55, material.roughness);
+        if ('metalness' in material) material.metalness = 0;
+        return material;
+      });
+    }
   });
 
-  world.add(model);
+  model.name = 'YellowPlayableCharacter';
+  rig.add(model);
+  rig.position.set(0, 0, 0);
+  rig.updateMatrixWorld(true);
+  world.add(rig);
+
+  player = rig;
+  playerVisual = model;
+  playerCollider = collider;
+  return rig;
 }
 
 function createFallbackPlayer() {
-  const root = new THREE.Group();
-  root.name = 'FallbackPlayer';
+  const visual = new THREE.Group();
+  visual.name = 'YellowPlayableCharacter';
 
   const body = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.28, 0.92, 6, 10),
-    new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.78 })
+    new THREE.MeshStandardMaterial({ color: 0xffd21f, roughness: 0.78 })
   );
   body.position.y = 0.72;
   body.castShadow = true;
-  root.add(body);
+  visual.add(body);
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.22, 16, 12),
-    new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ color: 0xffd21f, roughness: 0.9 })
   );
   head.position.y = 1.44;
   head.castShadow = true;
-  root.add(head);
+  visual.add(head);
 
-  root.position.set(0, 0, 0);
-  world.add(root);
-  player = root;
+  createPlayerRig(visual, 1);
   playerAnimation = null;
 }
 
@@ -127,11 +162,10 @@ async function loadPlayer() {
       throw new Error('Universal character has no complete idle/locomotion set');
     }
 
-    player = gltf.scene;
-    groundCharacter(player);
+    createPlayerRig(gltf.scene);
 
-    playerAnimation = new AnimationSystem(player);
-    playerAnimation.bind(new THREE.AnimationMixer(player), clips);
+    playerAnimation = new AnimationSystem(playerVisual);
+    playerAnimation.bind(new THREE.AnimationMixer(playerVisual), clips);
     playerAnimation.play('idle', 0);
     return;
   } catch (error) {
@@ -140,11 +174,11 @@ async function loadPlayer() {
 
   try {
     const gltf = await characterPack.loadAnimationLibrary();
-    player = characterPack.clone(gltf, new THREE.Vector3(), 0.92);
-    groundCharacter(player, 1);
+    const visual = characterPack.clone(gltf, new THREE.Vector3(), 0.92);
+    createPlayerRig(visual, 1);
 
-    playerAnimation = new AnimationSystem(player);
-    playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations || []);
+    playerAnimation = new AnimationSystem(playerVisual);
+    playerAnimation.bind(new THREE.AnimationMixer(playerVisual), gltf.animations || []);
     playerAnimation.play('idle', 0);
     return;
   } catch (error) {
