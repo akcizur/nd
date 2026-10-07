@@ -66,7 +66,6 @@ let playerCollider = null;
 let playerAnimation = null;
 let playerController = null;
 let cameraSystem = null;
-let universalAnimations = [];
 
 function createPlayerRig(model, scale = 0.92) {
   const rig = new THREE.Group();
@@ -89,23 +88,13 @@ function createPlayerRig(model, scale = 0.92) {
   const bounds = new THREE.Box3().setFromObject(model);
   model.position.y = -bounds.min.y + 0.01;
 
-  // The selected playable model is the yellow character. Keep the model
-  // visually distinct while the collider remains completely invisible.
+  // Gobkit C-1 is authored facing +Z. The controller uses -Z as forward,
+  // so compensate exactly once at the visual root.
+  model.rotation.y = Math.PI;
   model.traverse(node => {
     if (!node.isMesh) return;
     node.castShadow = true;
     node.receiveShadow = true;
-
-    if (node.material) {
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
-      node.material = materials.map(source => {
-        const material = source.clone();
-        if ('color' in material) material.color.set(0xffd21f);
-        if ('roughness' in material) material.roughness = Math.max(0.55, material.roughness);
-        if ('metalness' in material) material.metalness = 0;
-        return material;
-      });
-    }
   });
 
   model.name = 'YellowPlayableCharacter';
@@ -146,35 +135,24 @@ function createFallbackPlayer() {
 
 async function loadPlayer() {
   try {
-    const animationGltf = await characterPack.loadAnimationLibrary();
-    universalAnimations = animationGltf.animations || [];
-  } catch (error) {
-    console.warn('UAL unavailable:', error);
-  }
-
-  try {
     const gltf = await characterPack.loadPlayer();
-    const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
-    const hasIdle = clips.some(clip => /idle|stand|breath/i.test(clip.name));
-    const hasLocomotion = clips.some(clip => /walk|jog|run|sprint/i.test(clip.name));
+    const clips = characterPack.createPlayerClips(gltf);
 
-    if (!hasIdle || !hasLocomotion) {
-      throw new Error('Universal character has no complete idle/locomotion set');
+    // This is the actual yellow Gobkit C-1 asset. Preserve its baked texture;
+    // never recolor another model and never display the other variants.
+    createPlayerRig(gltf.scene, 2.4);
+
+    if (clips.length) {
+      playerAnimation = new AnimationSystem(playerVisual);
+      playerAnimation.bind(new THREE.AnimationMixer(playerVisual), clips);
+      playerAnimation.play('idle', 0);
     }
 
-    createPlayerRig(gltf.scene);
-
-    playerAnimation = new AnimationSystem(playerVisual);
-    playerAnimation.bind(new THREE.AnimationMixer(playerVisual), clips);
-    playerAnimation.play('idle', 0);
     return;
   } catch (error) {
-    console.warn('Universal character failed:', error);
+    console.warn('Yellow C-1 player failed:', error);
   }
 
-  // Never use the animation-library donor scene as a visible character.
-  // It can contain multiple reference meshes. The playable scene must contain
-  // exactly one character model.
   createFallbackPlayer();
 }
 
