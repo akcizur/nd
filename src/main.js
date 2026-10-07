@@ -1,164 +1,85 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CharacterPackLoader } from './assets/CharacterPackLoader.js';
-import { BuildingPackLoader } from './assets/BuildingPackLoader.js';
 import './style.css';
-import { MavonGameplayBridge } from './game/mavonLayer.js';
 import { GameState, GameStateManager } from './core/GameState.js';
 import { InputManager } from './core/InputManager.js';
-import { SystemRegistry } from './core/SystemRegistry.js';
 import { DebugOverlay } from './core/DebugOverlay.js';
 import { MobileControls } from './mobile/MobileControls.js';
 import { MainMenu } from './ui/MainMenu.js';
 import { GameMenu } from './ui/GameMenu.js';
 import { SettingsMenu } from './ui/SettingsMenu.js';
 import { PlayerController } from './player/PlayerController.js';
-import { VehicleController } from './vehicle/VehicleController.js';
 import { CameraSystem } from './camera/CameraSystem.js';
 import { AnimationSystem } from './animation/AnimationSystem.js';
-import { CheckpointSystem } from './game/CheckpointSystem.js';
-import { PhysicsWorld } from './physics/PhysicsWorld.js';
-import { CitySimulation } from './world/CitySimulation.js';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9fd7f5);
-scene.fog = new THREE.Fog(0x9fd7f5, 70, 240);
+scene.background = new THREE.Color(0x0b0b0b);
 
-const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 600);
-camera.position.set(0, 4, 7);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 250);
+camera.position.set(0, 3, 6);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'high-performance',
+});
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.querySelector('#app').appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xdff4ff, 0x304030, 1.9));
-const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-sun.position.set(50, 90, 30);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x202020, 1.7));
+const sun = new THREE.DirectionalLight(0xffffff, 2.1);
+sun.position.set(8, 14, 6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);
 scene.add(sun);
 
 const world = new THREE.Group();
 scene.add(world);
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(320, 320),
-  new THREE.MeshStandardMaterial({ color: 0x586158, roughness: 0.96 })
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(160, 160),
+  new THREE.MeshStandardMaterial({
+    color: 0x303030,
+    roughness: 0.94,
+    metalness: 0,
+  })
 );
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-world.add(floor);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+world.add(ground);
 
-const collisionBoxes = [];
-const proceduralBuildings = [];
-const buildingPackGroup = new THREE.Group();
-buildingPackGroup.name = 'BuildingPack';
-world.add(buildingPackGroup);
-function box(x, y, z, w, h, d, color, collision = false) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.86 })
-  );
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  world.add(mesh);
-  if (collision) {
-    collisionBoxes.push(new THREE.Box3(
-      new THREE.Vector3(x - w / 2, y - h / 2, z - d / 2),
-      new THREE.Vector3(x + w / 2, y + h / 2, z + d / 2)
-    ));
-  }
-  return mesh;
-}
-
-for (let i = -120; i <= 120; i += 24) {
-  box(0, 0.025, i, 240, 0.05, 9, 0x202020);
-  box(i, 0.026, 0, 9, 0.052, 240, 0x202020);
-}
-
-const buildingColors = [0x686868, 0x777777, 0x555555, 0x858585];
-for (let x = -96; x <= 96; x += 24) {
-  for (let z = -96; z <= 96; z += 24) {
-    if (Math.abs(x) < 15 || Math.abs(z) < 15) continue;
-    const seed = Math.abs((x * 17 + z * 31) | 0);
-    const w = 13 + (seed % 5);
-    const d = 13 + ((seed >> 3) % 5);
-    const h = 6 + (seed % 15);
-    const building = box(x, h / 2, z, w, h, d, buildingColors[seed % buildingColors.length], false);
-    proceduralBuildings.push(building);
-  }
-}
-
-const car = new THREE.Group();
-const carBody = new THREE.Mesh(
-  new THREE.BoxGeometry(1.8, 0.55, 3.6),
-  new THREE.MeshStandardMaterial({ color: 0xe2e2e2, metalness: 0.15, roughness: 0.5 })
-);
-carBody.position.y = 0.65;
-carBody.castShadow = true;
-car.add(carBody);
-const cabin = new THREE.Mesh(
-  new THREE.BoxGeometry(1.45, 0.55, 1.65),
-  new THREE.MeshStandardMaterial({ color: 0x20252a, roughness: 0.32 })
-);
-cabin.position.set(0, 1.08, -0.15);
-cabin.castShadow = true;
-car.add(cabin);
-
-const wheels = [];
-for (const x of [-0.82, 0.82]) {
-  for (const z of [-1.15, 1.15]) {
-    const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.36, 0.36, 0.22, 16),
-      new THREE.MeshStandardMaterial({ color: 0x090909, roughness: 0.9 })
-    );
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, 0.4, z);
-    wheel.castShadow = true;
-    car.add(wheel);
-    wheels.push(wheel);
-  }
-}
-car.position.set(0, 0, 5);
-world.add(car);
+// A small grid makes movement and camera orientation immediately readable.
+const grid = new THREE.GridHelper(160, 80, 0x666666, 0x252525);
+grid.position.y = 0.006;
+world.add(grid);
 
 const loader = new GLTFLoader();
 const characterPack = new CharacterPackLoader(loader);
-const buildingPack = new BuildingPackLoader(loader);
-const GOBKIT_MODELS = [
-  { url: 'https://gobkit.com/freebies/minion/minion-a01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
-  { url: 'https://gobkit.com/freebies/minion/minion-b01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
-  { url: 'https://gobkit.com/freebies/minion/minion-c01.glb', fps: 24, clips: { idle: [0, 29], attack: [30, 59], dead: [60, 89] } },
-];
 
 let player = null;
 let playerAnimation = null;
 let playerController = null;
-let vehicleController = null;
 let cameraSystem = null;
-let checkpoints = null;
-let physicsWorld = null;
-let inVehicle = false;
-let interactLocked = false;
-let gameplay = null;
-let playerPhysics = null;
-let vehiclePhysics = null;
-let citySimulation = null;
 let universalAnimations = [];
 
-function configurePlayerObject(model, scale = 1) {
+function groundCharacter(model, scale = 0.92) {
   model.scale.setScalar(scale);
-  model.position.set(0, 0, 1);
+  model.updateMatrixWorld(true);
+
+  const bounds = new THREE.Box3().setFromObject(model);
+  model.position.set(0, -bounds.min.y + 0.01, 0);
+  model.updateMatrixWorld(true);
+
   model.traverse(node => {
-    if (node.isMesh) {
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
+    if (!node.isMesh) return;
+    node.castShadow = true;
+    node.receiveShadow = true;
   });
+
   world.add(model);
 }
 
@@ -168,7 +89,7 @@ function createFallbackPlayer() {
 
   const body = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.28, 0.92, 6, 10),
-    new THREE.MeshStandardMaterial({ color: 0x3b4652, roughness: 0.78 })
+    new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.78 })
   );
   body.position.y = 0.72;
   body.castShadow = true;
@@ -176,184 +97,96 @@ function createFallbackPlayer() {
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.22, 16, 12),
-    new THREE.MeshStandardMaterial({ color: 0xd2a37b, roughness: 0.92 })
+    new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.9 })
   );
   head.position.y = 1.44;
   head.castShadow = true;
   root.add(head);
 
-  configurePlayerObject(root, 1);
+  root.position.set(0, 0, 0);
+  world.add(root);
+  player = root;
   playerAnimation = null;
-  console.warn('Player asset fallback: procedural humanoid');
 }
 
 async function loadPlayer() {
+  try {
+    const animationGltf = await characterPack.loadAnimationLibrary();
+    universalAnimations = animationGltf.animations || [];
+  } catch (error) {
+    console.warn('UAL unavailable:', error);
+  }
+
   try {
     const gltf = await characterPack.loadUniversal();
     const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
     const hasIdle = clips.some(clip => /idle|stand|breath/i.test(clip.name));
     const hasLocomotion = clips.some(clip => /walk|jog|run|sprint/i.test(clip.name));
+
     if (!hasIdle || !hasLocomotion) {
-      throw new Error(`Universal Animation Library binding incomplete (idle=${hasIdle}, locomotion=${hasLocomotion}, clips=${clips.length})`);
+      throw new Error('Universal character has no complete idle/locomotion set');
     }
 
     player = gltf.scene;
-    configurePlayerObject(player, 0.92);
+    groundCharacter(player);
 
     playerAnimation = new AnimationSystem(player);
     playerAnimation.bind(new THREE.AnimationMixer(player), clips);
     playerAnimation.play('idle', 0);
-    console.info('Player asset: Quaternius Universal Base + Universal Animation Library', clips.length);
     return;
   } catch (error) {
-    console.warn('Quaternius player package failed; trying native UAL fallback:', error);
+    console.warn('Universal character failed:', error);
   }
 
   try {
-    const animationGltf = await characterPack.loadAnimationLibrary();
-    player = characterPack.clone(animationGltf, new THREE.Vector3(0, 0, 1), 0.92);
-    configurePlayerObject(player, 1);
+    const gltf = await characterPack.loadAnimationLibrary();
+    player = characterPack.clone(gltf, new THREE.Vector3(), 0.92);
+    groundCharacter(player, 1);
+
     playerAnimation = new AnimationSystem(player);
-    playerAnimation.bind(new THREE.AnimationMixer(player), animationGltf.animations || []);
+    playerAnimation.bind(new THREE.AnimationMixer(player), gltf.animations || []);
     playerAnimation.play('idle', 0);
-    console.info('Player asset: Quaternius UAL native animated fallback');
     return;
   } catch (error) {
-    console.warn('Native UAL player fallback failed; using procedural player:', error);
+    console.warn('Animated character fallback failed:', error);
   }
 
   createFallbackPlayer();
 }
 
-async function loadBuildings() {
-  try {
-    const models = await buildingPack.loadPack();
-    for (const mesh of proceduralBuildings) mesh.removeFromParent();
-    collisionBoxes.length = 0;
-
-    let index = 0;
-    for (let x = -96; x <= 96; x += 24) {
-      for (let z = -96; z <= 96; z += 24) {
-        if (Math.abs(x) < 15 || Math.abs(z) < 15) continue;
-        const source = models[index++ % models.length];
-        const targetHeight = 9 + ((Math.abs(x * 13 + z * 7) % 16));
-        const model = buildingPack.instantiate(source, new THREE.Vector3(x, 0, z), 1);
-        let bounds = buildingPack.getBounds(model);
-        const height = Math.max(0.1, bounds.max.y - bounds.min.y);
-        model.scale.multiplyScalar(targetHeight / height);
-        model.updateMatrixWorld(true);
-        bounds = buildingPack.getBounds(model);
-        model.position.y -= bounds.min.y;
-        model.rotation.y = ((index * 37) % 360) * Math.PI / 180;
-        model.updateMatrixWorld(true);
-        bounds = buildingPack.getBounds(model);
-        buildingPackGroup.add(model);
-
-        const size = bounds.getSize(new THREE.Vector3());
-        const center = bounds.getCenter(new THREE.Vector3());
-        collisionBoxes.push(new THREE.Box3(
-          new THREE.Vector3(center.x - size.x * 0.42, 0, center.z - size.z * 0.42),
-          new THREE.Vector3(center.x + size.x * 0.42, Math.max(1, size.y), center.z + size.z * 0.42)
-        ));
-      }
-    }
-  } catch (error) {
-    console.warn('Building pack failed; keeping procedural city.', error);
-  }
-}
-
-const npcs = [];
-async function loadNpc(url, position, universal = false) {
-  try {
-    const gltf = await (universal ? characterPack.loadUniversal() : characterPack.load(url));
-    const model = characterPack.clone(gltf, position, universal ? 0.92 : 1.1);
-    world.add(model);
-    const mixer = new THREE.AnimationMixer(model);
-    const clips = universal
-      ? characterPack.retargetClips(universalAnimations, model)
-      : (() => {
-          const source = gltf.animations?.[0];
-          if (!source) return [];
-          return Object.entries(GOBKIT_MODELS.find(item => item.url === url)?.clips || {})
-            .map(([name, [from, to]]) =>
-              THREE.AnimationUtils.subclip(source, name, from, to + 1, GOBKIT_MODELS.find(item => item.url === url)?.fps || 24)
-            );
-        })();
-
-    const idle = clips.find(clip => /^idle$/i.test(clip.name)) ||
-      clips.find(clip => /idle|stand|breath/i.test(clip.name));
-    if (idle) mixer.clipAction(idle).play();
-    npcs.push({ model, mixer, phase: Math.random() * Math.PI * 2 });
-  } catch (error) {
-    console.warn('NPC asset failed:', error);
-  }
-}
-
-async function loadCharacters() {
-  try {
-    const animationGltf = await characterPack.loadAnimationLibrary();
-    universalAnimations = animationGltf.animations || [];
-    console.info('Quaternius UAL loaded:', universalAnimations.length, 'clips');
-  } catch (error) {
-    console.warn('Universal Animation Library failed:', error);
-    universalAnimations = [];
-  }
-
-  await loadPlayer();
-  await loadBuildings();
-  await Promise.all([
-    loadNpc(null, new THREE.Vector3(-7, 0, -8), true),
-    loadNpc(null, new THREE.Vector3(7, 0, -12), true),
-    ...GOBKIT_MODELS.map((asset, index) =>
-      loadNpc(asset.url, new THREE.Vector3((index - 1) * 5, 0, -18 - index * 3))
-    ),
-  ]);
-}
-
 const input = new InputManager();
-const systems = new SystemRegistry();
+const mobileControls = new MobileControls(input);
 const debug = new DebugOverlay({ enabled: new URLSearchParams(location.search).has('debug') });
 const gameState = new GameStateManager(GameState.MAIN_MENU);
-const mobileControls = new MobileControls(input);
-let settingsReturnState = GameState.MAIN_MENU;
 
-const mainMenu = new MainMenu({
-  onPlay: () => enterPlay(),
-  onSettings: () => openSettings(GameState.MAIN_MENU),
-  onAbout: () => showAbout(),
-});
-const gameMenu = new GameMenu({
-  onResume: () => resumeGame(),
-  onRestart: () => restartGame(),
-  onSettings: () => openSettings(GameState.PAUSED),
-  onMainMenu: () => returnToMainMenu(),
-});
-const savedControls = input.controlSettings;
 const cameraSettings = {
-  sensitivity: savedControls.sensitivity ?? 1,
-  invertX: savedControls.invertX ?? false,
-  invertY: savedControls.invertY ?? false,
+  sensitivity: input.controlSettings.sensitivity ?? 1,
+  invertX: input.controlSettings.invertX ?? false,
+  invertY: input.controlSettings.invertY ?? false,
 };
+
 const movementSettings = {
-  sprintMode: savedControls.sprintMode,
-  cameraRelativeMovement: input.controlSettings.cameraRelativeMovement,
+  sprintMode: input.controlSettings.sprintMode,
+  cameraRelativeMovement: true,
   touchDeadzone: input.controlSettings.touchDeadzone,
 };
 
-const applyCameraSettings = () => {
+function applyCameraSettings() {
   if (!cameraSystem) return;
   cameraSystem.sensitivityX = 1.8 * cameraSettings.sensitivity;
   cameraSystem.sensitivityY = 1.6 * cameraSettings.sensitivity;
   cameraSystem.invertX = cameraSettings.invertX;
   cameraSystem.invertY = cameraSettings.invertY;
-};
+}
 
-const applyMovementSettings = settings => {
-  Object.assign(movementSettings, settings);
+function applyMovementSettings(settings = {}) {
+  Object.assign(movementSettings, settings, {
+    cameraRelativeMovement: true,
+  });
   input.setControlSettings(movementSettings);
   mobileControls.setTouchDeadzone(movementSettings.touchDeadzone);
   playerController?.setMovementSettings(movementSettings);
-};
+}
 
 const settingsMenu = new SettingsMenu({
   onBack: () => closeSettings(),
@@ -362,19 +195,30 @@ const settingsMenu = new SettingsMenu({
     Object.assign(cameraSettings, settings);
     applyCameraSettings();
   },
-  onMovementSettings: settings => {
-    applyMovementSettings(settings);
-  },
+  onMovementSettings: settings => applyMovementSettings(settings),
+});
+
+const mainMenu = new MainMenu({
+  onPlay: () => enterPlay(),
+  onSettings: () => openSettings(GameState.MAIN_MENU),
+  onAbout: () => showAbout(),
+});
+
+const gameMenu = new GameMenu({
+  onResume: () => resumeGame(),
+  onRestart: () => restartGame(),
+  onSettings: () => openSettings(GameState.PAUSED),
+  onMainMenu: () => returnToMainMenu(),
 });
 
 const aboutMenu = document.createElement('section');
 aboutMenu.className = 'menu-screen about-menu';
 aboutMenu.innerHTML = `
   <div class="menu-card">
-    <div class="menu-kicker">ND / CITY</div>
-    <h2>ABOUT</h2>
-    <p>Three.js city driving prototype.</p>
-    <p>Keyboard, touch and dynamic mobile camera controls.</p>
+    <div class="menu-kicker">ND / MOVEMENT</div>
+    <h2>THIRD PERSON</h2>
+    <p>Simple character movement prototype.</p>
+    <p>WASD / touch joystick + third-person camera.</p>
     <button data-menu="back">BACK</button>
   </div>`;
 document.body.appendChild(aboutMenu);
@@ -390,6 +234,8 @@ function showAbout() {
   mainMenu.hide();
   aboutMenu.classList.add('visible');
 }
+
+let settingsReturnState = GameState.MAIN_MENU;
 
 function openSettings(returnState) {
   settingsReturnState = returnState;
@@ -411,44 +257,11 @@ function closeSettings() {
   }
 }
 
-function ensureRuntimeControllers() {
-  if (!cameraSystem) cameraSystem = new CameraSystem(camera);
-  applyCameraSettings();
-
-  if (!playerController && player) {
-    playerController = new PlayerController({
-      object: player,
-      input: input.input,
-      camera: cameraSystem,
-      physics: physicsWorld,
-      movementSettings,
-    });
-  }
-
-  if (!vehicleController && car) {
-    vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
-  }
-
-  if (playerController && physicsWorld && playerPhysics) {
-    playerController.physics = physicsWorld;
-    playerController.camera = cameraSystem;
-    playerController.bindPhysics(playerPhysics);
-  }
-
-  if (vehicleController && physicsWorld && vehiclePhysics) {
-    vehicleController.physics = physicsWorld;
-    vehicleController.bindPhysics(vehiclePhysics);
-  }
-}
-
-function syncRuntimeActors() {
-  if (playerPhysics) physicsWorld?.syncObject(player, playerPhysics);
-  if (vehiclePhysics) physicsWorld?.syncObject(car, vehiclePhysics);
-}
-
 function enterPlay() {
-  if (!player || !car || !cameraSystem || !playerController || !vehicleController) return;
-  if (!inVehicle) physicsWorld?.setCharacterEnabled(playerPhysics, true);
+  if (!player || !playerController || !cameraSystem) return;
+
+  playerController.reset(new THREE.Vector3(0, 0, 0), 0);
+  cameraSystem.reset(player);
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
   settingsMenu.hide();
@@ -456,8 +269,6 @@ function enterPlay() {
   gameMenu.button.classList.remove('hidden');
   mobileControls.root.classList.remove('hidden');
   gameState.set(GameState.PLAYING);
-  input.consume('interact');
-  input.consume('pause');
 }
 
 function resumeGame() {
@@ -467,37 +278,13 @@ function resumeGame() {
 
 function restartGame() {
   if (!player) return;
-  cameraSystem && (cameraSystem.yaw = 0, cameraSystem.pitch = .28);
-  vehicleController && (vehicleController.speed = 0);
-  physicsWorld?.setCharacterEnabled(playerPhysics, true);
-  physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
-  playerController && (playerController.grounded = true, playerController.resetMovement());
-  physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
-  vehicleController && (vehicleController.speed = 0, vehicleController.yaw = 0);
-  checkpoints?.reset();
-  player.rotation.set(0, 0, 0);
-  player.visible = true;
-  car.userData.speed = 0;
-  inVehicle = false;
-  document.body.classList.remove('vehicle-mode');
-  mobileControls.setVehicleMode(false);
-  syncRuntimeActors();
+  playerController.reset(new THREE.Vector3(0, 0, 0), 0);
+  cameraSystem.reset(player);
   gameMenu.close();
   gameState.set(GameState.PLAYING);
 }
 
 function returnToMainMenu() {
-  if (inVehicle) {
-    inVehicle = false;
-    player.visible = true;
-    physicsWorld?.setCharacterEnabled(playerPhysics, true);
-    physicsWorld?.resetObject(player, playerPhysics, new THREE.Vector3(0, 0, 1), 0);
-    physicsWorld?.resetObject(car, vehiclePhysics, new THREE.Vector3(0, 0, 5), 0);
-    vehicleController && (vehicleController.speed = 0, vehicleController.yaw = 0);
-    document.body.classList.remove('vehicle-mode');
-    mobileControls.setVehicleMode(false);
-  }
-  syncRuntimeActors();
   gameMenu.close();
   gameMenu.button.classList.add('hidden');
   mobileControls.root.classList.add('hidden');
@@ -507,198 +294,66 @@ function returnToMainMenu() {
 
 gameState.onChange(state => {
   document.body.dataset.gameState = state;
-  if (state !== GameState.PLAYING) mobileControls.root.classList.add('hidden');
-  else mobileControls.root.classList.remove('hidden');
+  mobileControls.root.classList.toggle('hidden', state !== GameState.PLAYING);
 });
 
 const hudObjective = document.querySelector('#objective');
 const hudSpeed = document.querySelector('#speed');
 const hudHint = document.querySelector('#hint');
 
-const controlLabel = action => {
-  const codes = input.bindings[action] || [];
-  const labels = codes.map(code => ({
-    KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D',
-    ArrowUp: '↑', ArrowLeft: '←', ArrowDown: '↓', ArrowRight: '→',
-    ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', Space: 'SPACE',
-    KeyC: 'C', KeyE: 'E', Escape: 'ESC',
-  }[code] || code)).slice(0, 2);
-  return labels.join('/');
-};
-
-const movementHint = () => [
-  controlLabel('moveForward'),
-  controlLabel('moveLeft'),
-  controlLabel('moveBackward'),
-  controlLabel('moveRight'),
-].join('/') + ' · ' + controlLabel('sprint') + ' = běh · ' + controlLabel('jump') + ' = skok · RMB = kamera · ' + controlLabel('interact') + ' = auto';
-
-function blocked(position, radius = 0.42, height = 1.9) {
-  const playerBox = new THREE.Box3(
-    new THREE.Vector3(position.x - radius, 0, position.z - radius),
-    new THREE.Vector3(position.x + radius, height, position.z + radius)
-  );
-  return collisionBoxes.some(item => playerBox.intersectsBox(item));
-}
-
-function nearCar() {
-  if (!player || inVehicle) return false;
-  const dx = player.position.x - car.position.x;
-  const dz = player.position.z - car.position.z;
-  return Math.hypot(dx, dz) < 4.4;
-}
-
-function toggleVehicle() {
-  if (!player || interactLocked) return;
-  if (inVehicle) {
-    exitVehicle();
-  } else if (nearCar()) {
-    enterVehicle();
-  }
-}
-
-function enterVehicle() {
-  interactLocked = true;
-  inVehicle = true;
-  gameplay?.enterVehicle();
-  player.visible = false;
-  physicsWorld?.resetObject(player, playerPhysics, car.position.clone(), car.rotation.y);
-  physicsWorld?.setCharacterEnabled(playerPhysics, false);
-  car.userData.speed = 0;
-  hudObjective.textContent = 'Vehicle · řízení aktivní';
-  hudHint.textContent = movementHint() + ' · vystoupit';
-  document.body.classList.add('vehicle-mode');
-  mobileControls.setVehicleMode(true);
-  setTimeout(() => { interactLocked = false; }, 180);
-}
-
-function exitVehicle() {
-  interactLocked = true;
-  const side = new THREE.Vector3(2.1, 0, 0).applyQuaternion(car.quaternion);
-  const exitPosition = car.position.clone().add(side);
-  if (blocked(exitPosition, 0.4, 1.9)) {
-    side.multiplyScalar(-1);
-    exitPosition.copy(car.position).add(side);
-  }
-  physicsWorld?.setCharacterEnabled(playerPhysics, true);
-  physicsWorld?.resetObject(player, playerPhysics, exitPosition, car.rotation.y);
-  gameplay?.exitVehicle(exitPosition);
-  player.rotation.y = car.rotation.y;
-  player.visible = true;
-  inVehicle = false;
-  car.userData.speed = 0;
-  hudObjective.textContent = 'Player ready · Chůze / běh';
-  hudHint.textContent = movementHint() + ' · nastoupit';
-  document.body.classList.remove('vehicle-mode');
-  mobileControls.setVehicleMode(false);
-  playerController?.resetMovement();
-  setTimeout(() => { interactLocked = false; }, 180);
-}
-
 function updatePlayer(dt) {
-  if (!player || inVehicle || !playerController) return;
+  if (!playerController || gameState.current !== GameState.PLAYING) return;
+
   playerController.update(dt);
 
-  const state = playerController.state;
-  const speed = Math.hypot(
-    playerController.horizontalVelocity.x,
-    playerController.horizontalVelocity.z
-  );
+  const speed = playerController.horizontalSpeed;
   const maxSpeed = playerController.input.sprint
     ? playerController.sprintSpeed
     : playerController.runSpeed;
 
-  // Use the original control vector for animation. The controller rotates the
-  // character toward velocity, so using velocity here would erase backward and
-  // strafe intent.
-  const animationInput = playerController.animationInput;
   playerAnimation?.updateLocomotion({
     speed,
     maxSpeed,
     grounded: playerController.grounded,
     verticalVelocity: playerController.velocityY,
-    forward: animationInput.forward,
-    strafe: animationInput.strafe,
-    crouched: Boolean(playerController.input.crouch),
+    forward: playerController.animationInput.forward,
+    strafe: playerController.animationInput.strafe,
+    crouched: false,
     sprinting: Boolean(playerController.input.sprint),
     dt,
   });
 
-  hudSpeed.textContent = state.toUpperCase() + ' · ' +
+  hudSpeed.textContent = playerController.state.toUpperCase() + ' · ' +
     Math.round(speed * 10) / 10 + ' m/s';
 }
 
-function updateVehicle(dt) {
-  if (!inVehicle || !vehicleController) return;
-  vehicleController.update(dt);
-  car.userData.speed = vehicleController.speed;
-  carBody.rotation.z = vehicleController.bodyRoll;
-  carBody.rotation.x = vehicleController.bodyPitch;
-  cabin.rotation.z = vehicleController.bodyRoll * .8;
-  cabin.rotation.x = vehicleController.bodyPitch * .7;
-  for (const wheel of wheels) {
-    wheel.rotation.x = wheel.userData.lastSpin ?? wheel.rotation.x;
-    wheel.rotation.y = wheel.userData.steer ?? 0;
-  }
-  hudSpeed.textContent = 'AUTO · ' + Math.round(Math.abs(vehicleController.speed) * 3.6) + ' KM/H';
-}
-
-function updateNpcs(dt) {
-  for (const npc of npcs) {
-    npc.mixer.update(dt);
-    npc.model.rotation.y += Math.sin(performance.now() * 0.0006 + npc.phase) * 0.0004;
-  }
-}
-
 function updateCamera(dt) {
-  if (!cameraSystem) return;
-  cameraSystem.update(dt, {
-    subject: inVehicle ? car : player,
-    vehicle: inVehicle,
+  cameraSystem?.update(dt, {
+    subject: player,
+    vehicle: false,
     input: input.input,
-    speed: inVehicle ? vehicleController?.speed || 0 : 0,
-    collisionTest: blocked,
+    speed: playerController?.horizontalSpeed || 0,
   });
 }
 
-function updateInteraction(dt) {
+function updateInteraction() {
   if (gameState.current !== GameState.PLAYING) return;
 
-  if (input.consume('interact')) toggleVehicle();
   if (input.consume('pause')) {
     gameState.set(GameState.PAUSED);
     gameMenu.open();
   }
 
-  if (inVehicle) {
-    hudObjective.textContent = 'Vehicle · řízení aktivní';
-    hudHint.textContent = movementHint() + ' · vystoupit';
-    return;
-  }
-
-  if (nearCar()) {
-    hudObjective.textContent = 'E · nastoupit do auta';
-    hudHint.textContent = controlLabel('interact') + ' / dotykové tlačítko · nastoupit';
-  } else {
-    hudObjective.textContent = 'Volný pohyb městem';
-    hudHint.textContent = movementHint() + ' · přibliž se k autu';
-  }
+  hudObjective.textContent = 'Third-person movement';
+  hudHint.textContent = 'WASD · SHIFT běh · RMB kamera';
 }
 
 const clock = new THREE.Clock();
-async function start() {
-  hudObjective.textContent = 'Loading city…';
-  physicsWorld = await PhysicsWorld.create();
-  physicsWorld.addGround(320);
-  await loadCharacters();
-  citySimulation = new CitySimulation(world, { trafficCount: 16, pedestrianCount: 20 });
-  citySimulation.init();
 
-  for (const box of collisionBoxes) {
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    physicsWorld.addStaticBox(center.x, center.y, center.z, size.x, size.y, size.z);
-  }
+async function start() {
+  hudObjective.textContent = 'Loading character…';
+
+  await loadPlayer();
 
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
@@ -707,51 +362,39 @@ async function start() {
     object: player,
     input: input.input,
     camera: cameraSystem,
-    physics: physicsWorld,
     movementSettings,
   });
 
-  vehicleController = new VehicleController({ object: car, wheels, input: input.input, physics: physicsWorld });
-  playerPhysics = physicsWorld.createCharacter(player);
-  vehiclePhysics = physicsWorld.createVehicle(car);
-
-  playerController.bindPhysics(playerPhysics);
-  vehicleController.bindPhysics(vehiclePhysics);
-  physicsWorld.step(1 / 60);
-  syncRuntimeActors();
-
-  checkpoints = new CheckpointSystem(scene, [[0, .05, -24], [48, .05, -48], [72, .05, 24], [-48, .05, 48], [-72, .05, -24]]);
-  gameplay = new MavonGameplayBridge({ player, vehicle: car });
-
-  systems.register('player-controller', { fixedUpdate: updatePlayer });
-  systems.register('vehicle-controller', { fixedUpdate: updateVehicle });
-  systems.register('animation', { update: dt => playerAnimation?.update(dt) });
-  systems.register('npcs', { update: updateNpcs });
-  systems.register('city-simulation', { update: dt => citySimulation?.update(dt) });
-  systems.register('interaction', { update: updateInteraction });
-  systems.register('camera', { update: updateCamera });
-  systems.register('debug', { update: dt => debug.update({ dt, gameState: gameState.current, player: playerPhysics, vehicle: vehiclePhysics, physics: physicsWorld, inVehicle }) });
+  playerController.reset(new THREE.Vector3(0, 0, 0), 0);
+  cameraSystem.reset(player);
 
   hudObjective.textContent = 'Ready · PLAY';
   mainMenu.show();
+
   animate();
 }
 
 function animate() {
   requestAnimationFrame(animate);
+
   const dt = Math.min(clock.getDelta(), 0.05);
   input.update();
 
   if (gameState.current === GameState.PLAYING) {
-    physicsWorld?.step(dt, fixedDt => {
-      systems.fixedUpdate(fixedDt);
-    });
-    syncRuntimeActors();
-    vehicleController?.syncFromPhysics();
-    systems.update(dt);
-    const missionPosition = inVehicle ? car.position : player.position;
-    if (checkpoints?.update(missionPosition)) hudObjective.textContent = 'MISSION COMPLETE · FREE ROAM';
+    updatePlayer(dt);
+    playerAnimation?.update(dt);
+    updateCamera(dt);
+    updateInteraction();
   }
+
+  debug.update({
+    dt,
+    gameState: gameState.current,
+    player: playerController,
+    physics: null,
+    vehicle: null,
+    inVehicle: false,
+  });
 
   renderer.render(scene, camera);
 }
