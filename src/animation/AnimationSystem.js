@@ -7,6 +7,7 @@ export class AnimationSystem {
     this.actions = {};
     this.state = null;
     this.upperBody = null;
+    this.jumpStartedAt = 0;
     this.locomotion = {
       enabled: false,
       current: null,
@@ -88,9 +89,14 @@ export class AnimationSystem {
   }
 
   _configureLooping() {
-    for (const name of Object.keys(this.actions)) {
-      const action = this.actions[name];
-      if (action) action.setLoop(THREE.LoopRepeat, Infinity);
+    const unique = new Set(Object.values(this.actions).filter(Boolean));
+    for (const action of unique) {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+    }
+    if (this.actions.jump) {
+      this.actions.jump.setLoop(THREE.LoopOnce, 1);
+      this.actions.jump.clampWhenFinished = true;
     }
   }
 
