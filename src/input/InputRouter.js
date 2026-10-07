@@ -18,6 +18,7 @@ export class InputRouter {
         this.bindings[action] = [...DEFAULT_BINDINGS[action]];
       }
     }
+
     this.settings = {
       sprintMode: saved.sprintMode,
       cameraRelativeMovement: saved.cameraRelativeMovement,
@@ -31,6 +32,7 @@ export class InputRouter {
     this.keys = Object.create(null);
     this.mouseButtons = Object.create(null);
     this.gamepad = null;
+
     this.touchMove = { x: 0, y: 0 };
     this.touchLook = { x: 0, y: 0 };
     this.mouseLookDelta = { x: 0, y: 0 };
@@ -82,16 +84,24 @@ export class InputRouter {
   _bindMouse() {
     addEventListener('mousedown', event => {
       this.mouseButtons[`Mouse${event.button + 1}`] = true;
-      if (event.button === 2) this.mouseLook = true;
+
+      // RMB = third-person camera orbit.
+      if (event.button === 2) {
+        this.mouseLook = true;
+      }
     });
 
     addEventListener('mouseup', event => {
       this.mouseButtons[`Mouse${event.button + 1}`] = false;
-      if (event.button === 2) this.mouseLook = false;
+
+      if (event.button === 2) {
+        this.mouseLook = false;
+      }
     });
 
     addEventListener('mousemove', event => {
       if (!this.mouseLook || !this.enabled) return;
+
       this.mouseLookDelta.x += event.movementX || 0;
       this.mouseLookDelta.y += event.movementY || 0;
     });
@@ -114,8 +124,12 @@ export class InputRouter {
   }
 
   remap(action, codes) {
-    const next = Array.isArray(codes) ? [...codes].filter(Boolean) : [codes].filter(Boolean);
+    const next = Array.isArray(codes)
+      ? [...codes].filter(Boolean)
+      : [codes].filter(Boolean);
+
     if (!next.length) return false;
+
     this.bindings[action] = next;
     this.save();
     return true;
@@ -130,12 +144,14 @@ export class InputRouter {
     this.keys = Object.create(null);
     this.mouseButtons = Object.create(null);
     this.mouseLook = false;
+
     this.mouseLookDelta.x = 0;
     this.mouseLookDelta.y = 0;
     this.touchMove.x = 0;
     this.touchMove.y = 0;
     this.touchLook.x = 0;
     this.touchLook.y = 0;
+
     this.manualActions = Object.create(null);
     this.toggleActions = Object.create(null);
   }
@@ -169,14 +185,20 @@ export class InputRouter {
 
   setSettings(next) {
     const previousSprintMode = this.settings.sprintMode;
+
     this.settings = {
       ...this.settings,
       ...(next || {}),
     };
-    if (previousSprintMode !== this.settings.sprintMode && this.settings.sprintMode === 'hold') {
+
+    if (
+      previousSprintMode !== this.settings.sprintMode &&
+      this.settings.sprintMode === 'hold'
+    ) {
       this.toggleActions.sprint = false;
       this.manualActions.sprint = false;
     }
+
     this.save();
   }
 
@@ -189,6 +211,7 @@ export class InputRouter {
 
   resetSettings() {
     const defaults = getDefaultControlSettings();
+
     this.bindings = structuredClone(defaults.bindings);
     this.settings = {
       sprintMode: defaults.sprintMode,
@@ -198,6 +221,7 @@ export class InputRouter {
       invertX: defaults.invertX,
       invertY: defaults.invertY,
     };
+
     this.toggleActions = Object.create(null);
     this.manualActions = Object.create(null);
     this.save();
@@ -221,6 +245,7 @@ export class InputRouter {
       (this._down('moveBackward') ? 1 : 0);
 
     const pad = navigator.getGamepads?.()[this.gamepad?.index ?? -1];
+
     let moveX = keyboardX;
     let moveY = keyboardY;
     let lookX = 0;
@@ -232,6 +257,7 @@ export class InputRouter {
     }
 
     if (this.mouseLookDelta.x || this.mouseLookDelta.y) {
+      // Mouse orbit is already a frame delta; keep it small and smooth.
       lookX = this._clamp(this.mouseLookDelta.x * 0.012);
       lookY = this._clamp(this.mouseLookDelta.y * 0.012);
     } else {
@@ -276,14 +302,17 @@ export class InputRouter {
       'sprint',
       Boolean(this.manualActions.sprint || sprintFromKeyboard || padHeld.sprint)
     );
+
     this.input.setAction(
       'crouch',
       Boolean(this.manualActions.crouch || this._down('crouch') || padHeld.crouch)
     );
+
     this.input.setAction(
       'aim',
       Boolean(this.manualActions.aim || this._down('aim') || padHeld.aim || this.mouseLook)
     );
+
     this.input.setAction(
       'handbrake',
       Boolean(this.manualActions.handbrake || this._down('handbrake') || padHeld.handbrake)
@@ -311,11 +340,13 @@ export class InputRouter {
   _applyDeadzone(x, y, deadzone) {
     x = this._clamp(x);
     y = this._clamp(y);
+
     const magnitude = Math.hypot(x, y);
     if (magnitude <= deadzone) return { x: 0, y: 0 };
 
     const adjusted = (magnitude - deadzone) / (1 - deadzone);
     const factor = adjusted / magnitude;
+
     return {
       x: this._clamp(x * factor),
       y: this._clamp(y * factor),
