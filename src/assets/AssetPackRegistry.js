@@ -5,7 +5,7 @@ export const ASSET_PACKS = {
     license: 'CC0-1.0',
     source: 'https://quaternius.itch.io/universal-base-characters',
     models: {
-      male: 'https://raw.githubusercontent.com/programasweights/avatar/main/public/assets/character.glb',
+      player: 'https://raw.githubusercontent.com/programasweights/avatar/main/public/assets/character.glb',
     },
   },
   animations: {
