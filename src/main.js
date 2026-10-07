@@ -153,7 +153,7 @@ async function loadPlayer() {
   }
 
   try {
-    const gltf = await characterPack.loadUniversal();
+    const gltf = await characterPack.loadPlayer();
     const clips = characterPack.retargetClips(universalAnimations, gltf.scene);
     const hasIdle = clips.some(clip => /idle|stand|breath/i.test(clip.name));
     const hasLocomotion = clips.some(clip => /walk|jog|run|sprint/i.test(clip.name));
@@ -172,19 +172,9 @@ async function loadPlayer() {
     console.warn('Universal character failed:', error);
   }
 
-  try {
-    const gltf = await characterPack.loadAnimationLibrary();
-    const visual = characterPack.clone(gltf, new THREE.Vector3(), 0.92);
-    createPlayerRig(visual, 1);
-
-    playerAnimation = new AnimationSystem(playerVisual);
-    playerAnimation.bind(new THREE.AnimationMixer(playerVisual), gltf.animations || []);
-    playerAnimation.play('idle', 0);
-    return;
-  } catch (error) {
-    console.warn('Animated character fallback failed:', error);
-  }
-
+  // Never use the animation-library donor scene as a visible character.
+  // It can contain multiple reference meshes. The playable scene must contain
+  // exactly one character model.
   createFallbackPlayer();
 }
 
