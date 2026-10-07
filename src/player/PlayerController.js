@@ -1,12 +1,10 @@
 import * as THREE from 'three';
 
 export class PlayerController {
-  constructor({ object, input, camera, physics = null, movementSettings = {} }) {
+  constructor({ object, input, camera, movementSettings = {} }) {
     this.object = object;
     this.input = input;
     this.camera = camera;
-    this.physics = physics;
-    this.physicsBody = null;
 
     this.velocityY = 0;
     this.horizontalVelocity = new THREE.Vector3();
@@ -17,10 +15,11 @@ export class PlayerController {
     this.walkSpeed = 3.8;
     this.runSpeed = 6.2;
     this.sprintSpeed = 8.4;
-    this.acceleration = 25;
-    this.deceleration = 32;
-    this.airControl = 0.42;
-    this.rotationSharpness = 14;
+    this.acceleration = 18;
+    this.deceleration = 24;
+    this.rotationSharpness = 12;
+    this.gravity = 22;
+    this.jumpSpeed = 7.2;
 
     this.movementSettings = {
       cameraRelativeMovement: true,
@@ -28,107 +27,124 @@ export class PlayerController {
     };
   }
 
-  bindPhysics(body) {
-    this.physicsBody = body;
-    this.physics?.syncObject(this.object, body);
+  get horizontalSpeed() {
+    return Math.hypot(this.horizontalVelocity.x, this.horizontalVelocity.z);
   }
 
   setMovementSettings(settings = {}) {
-    this.movementSettings = { ...this.movementSettings, ...settings };
+    this.movementSettings = {
+      ...this.movementSettings,
+      ...settings,
+      cameraRelativeMovement: true,
+    };
   }
 
-  resetMovement() {
+  reset(position = new THREE.Vector3(), yaw = 0) {
+    this.object.position.copy(position);
+    this.object.rotation.set(0, yaw, 0);
     this.horizontalVelocity.set(0, 0, 0);
     this.velocityY = 0;
+    this.grounded = true;
+    this.state = 'idle';
+    this.animationInput.forward = 0;
+    this.animationInput.strafe = 0;
+    this.animationInput.magnitude = 0;
   }
 
   update(dt) {
-    if (!this.physicsBody || !this.physics) return;
-
     const move = this.input.move;
     const magnitude = Math.min(1, move.length());
 
-    // Keep the controller numerically stable when input arrives from keyboard,
-    // touch or a gamepad with a slightly noisy diagonal.
     if (magnitude < 0.001) {
       move.set(0, 0);
     }
+
     const speed = this.input.sprint
       ? this.sprintSpeed
-      : this.input.crouch
-        ? this.walkSpeed * 0.55
-        : magnitude < 0.65
-          ? this.walkSpeed
-          : this.runSpeed;
+      : magnitude < 0.65
+        ? this.walkSpeed
+        : this.runSpeed;
 
-    let forward;
-    let right;
-    if (this.movementSettings.cameraRelativeMovement) {
-      forward = new THREE.Vector3(-Math.sin(this.camera.yaw), 0, -Math.cos(this.camera.yaw));
-      right = new THREE.Vector3(Math.cos(this.camera.yaw), 0, -Math.sin(this.camera.yaw));
-    } else {
-      forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.object.rotation.y);
-      right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.object.rotation.y);
+    const yaw = this.camera?.yaw ?? this.object.rotation.y;
+
+    const forward = new THREE.Vector3(
+      -Math.sin(yaw),
+      0,
+      -Math.cos(yaw)
+    );
+    const right = new THREE.Vector3(
+      Math.cos(yaw),
+      0,
+      -Math.sin(yaw)
+    );
+
+    const desiredDirection = forward
+      .multiplyScalar(move.y)
+      .add(right.multiplyScalar(move.x));
+
+    if (desiredDirection.lengthSq() > 1) {
+      desiredDirection.normalize();
     }
 
-    const desiredDirection = forward.multiplyScalar(move.y).add(right.multiplyScalar(move.x));
-    // Preserve raw controls before the character rotates toward movement.
     this.animationInput.forward = move.y;
     this.animationInput.strafe = move.x;
     this.animationInput.magnitude = magnitude;
-    if (desiredDirection.lengthSq() > 1) desiredDirection.normalize();
 
     const targetVelocity = desiredDirection.multiplyScalar(speed * magnitude);
-    const targetRate = magnitude > 0.001
-      ? (this.grounded ? this.acceleration : this.acceleration * this.airControl)
-      : (this.grounded ? this.deceleration : this.deceleration * this.airControl);
+    const response = magnitude > 0.001 ? this.acceleration : this.deceleration;
+
     this.horizontalVelocity.x = THREE.MathUtils.damp(
-      this.horizontalVelocity.x, targetVelocity.x, targetRate, dt
+      this.horizontalVelocity.x,
+      targetVelocity.x,
+      response,
+      dt
     );
     this.horizontalVelocity.z = THREE.MathUtils.damp(
-      this.horizontalVelocity.z, targetVelocity.z, targetRate, dt
+      this.horizontalVelocity.z,
+      targetVelocity.z,
+      response,
+      dt
     );
 
-    if (magnitude > 0.05 && this.horizontalVelocity.lengthSq() > 0.001) {
-      // Three.js characters face local -Z. Convert world velocity to the yaw that
-      // makes -Z point exactly along the current movement vector.
-      const target = Math.atan2(-this.horizontalVelocity.x, -this.horizontalVelocity.z);
+    if (magnitude > 0.05 && this.horizontalSpeed > 0.08) {
+      const targetYaw = Math.atan2(
+        -this.horizontalVelocity.x,
+        -this.horizontalVelocity.z
+      );
       const delta = THREE.MathUtils.euclideanModulo(
-        target - this.object.rotation.y + Math.PI, Math.PI * 2
+        targetYaw - this.object.rotation.y + Math.PI,
+        Math.PI * 2
       ) - Math.PI;
-      this.object.rotation.y += delta * Math.min(1, dt * this.rotationSharpness);
+
+      this.object.rotation.y += delta * (1 - Math.exp(-this.rotationSharpness * dt));
     }
 
     if (this.input.jump && this.grounded) {
-      this.velocityY = 7.2;
+      this.velocityY = this.jumpSpeed;
       this.grounded = false;
       this.input.setAction('jump', false);
     }
 
-    this.velocityY -= 22 * dt;
+    this.velocityY -= this.gravity * dt;
 
-    const desiredTranslation = {
-      x: this.horizontalVelocity.x * dt,
-      y: this.velocityY * dt,
-      z: this.horizontalVelocity.z * dt,
-    };
-    const result = this.physics.moveCharacter(this.physicsBody, desiredTranslation);
-    this.grounded = result.grounded;
-    if (this.grounded && this.velocityY < 0) this.velocityY = 0;
+    this.object.position.x += this.horizontalVelocity.x * dt;
+    this.object.position.z += this.horizontalVelocity.z * dt;
+    this.object.position.y += this.velocityY * dt;
 
-    this.physics.syncObject(this.object, this.physicsBody);
+    if (this.object.position.y <= 0) {
+      this.object.position.y = 0;
+      this.velocityY = 0;
+      this.grounded = true;
+    }
 
-    const currentSpeed = Math.hypot(this.horizontalVelocity.x, this.horizontalVelocity.z);
     this.state = !this.grounded
       ? (this.velocityY > 0 ? 'jump' : 'fall')
-      : currentSpeed < 0.08
+      : this.horizontalSpeed < 0.08
         ? 'idle'
         : this.input.sprint
           ? 'sprint'
-          : this.input.crouch
-            ? 'crouch'
-            : currentSpeed < this.runSpeed * 0.92
-              ? 'walk'
-              : 'run';
+          : this.horizontalSpeed < this.runSpeed * 0.92
+            ? 'walk'
+            : 'run';
   }
 }
