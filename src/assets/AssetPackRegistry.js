@@ -1,19 +1,20 @@
 export const ASSET_PACKS = {
   characters: {
-    id: 'quaternius-universal-base',
-    name: 'Quaternius Universal Base Characters',
+    id: 'gobkit-yellow-player',
+    name: 'Gobkit Free Minions — Yellow C-1 Player',
     license: 'CC0-1.0',
-    source: 'https://quaternius.itch.io/universal-base-characters',
+    source: 'https://gobkit.itch.io/gobkit-free-minions',
     models: {
-      player: 'https://raw.githubusercontent.com/programasweights/avatar/main/public/assets/character.glb',
+      player: 'https://gobkit.com/freebies/minion/minion-c01.glb',
     },
   },
   animations: {
-    id: 'quaternius-universal-animation-library',
-    name: 'Quaternius Universal Animation Library',
+    id: 'gobkit-player-animations',
+    name: 'Gobkit C-1 embedded animations',
     license: 'CC0-1.0',
-    source: 'https://quaternius.itch.io/universal-animation-library',
-    gltf: 'https://raw.githubusercontent.com/J-Ponzo/gltf-universal-animation-library/main/glTF/AnimationLibrary_Godot_Standard.gltf',
+    source: 'https://gobkit.itch.io/gobkit-free-minions',
+    clips: ['idle', 'attack', 'dead'],
+    fps: 24,
   },
   buildings: {
     id: 'quaternius-downtown-city',
@@ -31,11 +32,11 @@ export const ASSET_PACKS = {
     name: 'Gobkit Free Minions',
     license: 'CC0-1.0',
     source: 'https://gobkit.itch.io/gobkit-free-minions',
-    models: [
-      'https://gobkit.com/freebies/minion/minion-a01.glb',
-      'https://gobkit.com/freebies/minion/minion-b01.glb',
-      'https://gobkit.com/freebies/minion/minion-c01.glb',
-    ],
+    models: {
+      yellow: 'https://gobkit.com/freebies/minion/minion-c01.glb',
+      green: 'https://gobkit.com/freebies/minion/minion-a01.glb',
+      red: 'https://gobkit.com/freebies/minion/minion-b01.glb',
+    },
   },
 };
 
