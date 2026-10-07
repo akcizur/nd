@@ -11,24 +11,18 @@ export class CharacterPackLoader {
 
   async load(url) {
     if (!this.cache.has(url)) this.cache.set(url, this.loader.loadAsync(url));
-    const gltf = await this.cache.get(url);
-    return gltf;
+    return this.cache.get(url);
   }
 
   async loadPlayer() {
     return this.load(ASSET_PACKS.characters.models.player);
   }
 
-  // Backward-compatible alias for older callers.
-  async loadUniversal() {
+  async loadAnimationLibrary() {
     return this.loadPlayer();
   }
 
-  async loadAnimationLibrary() {
-    return this.load(ASSET_PACKS.animations.gltf);
-  }
-
-  clone(gltf, position, scale = 1) {
+  clone(gltf, position = new THREE.Vector3(), scale = 1) {
     const model = SkeletonUtils.clone(gltf.scene);
     model.position.copy(position);
     model.scale.setScalar(scale);
@@ -41,11 +35,18 @@ export class CharacterPackLoader {
     return model;
   }
 
+  createPlayerClips(gltf) {
+    const master = gltf?.animations?.[0];
+    if (!master) return [];
+
+    return [
+      THREE.AnimationUtils.subclip(master, 'idle', 0, 30, 24),
+      THREE.AnimationUtils.subclip(master, 'attack', 30, 60, 24),
+      THREE.AnimationUtils.subclip(master, 'dead', 60, 90, 24),
+    ];
+  }
+
   retargetClips(clips, targetRoot) {
-    // UAL and the base character use the same humanoid skeleton, but glTF
-    // exports may encode the source node as "Armature/pelvis", "Armature|pelvis"
-    // or simply "pelvis". Three.js needs the target node binding, not the
-    // exporter-specific path. Resolve every track to the actual target node.
     const nodes = new Map();
     const normalized = new Map();
     const normalize = value => String(value || '')
@@ -74,10 +75,8 @@ export class CharacterPackLoader {
         .pop()
         .split('|')
         .pop();
-
       const target = nodes.get(sourceLeaf) || normalized.get(normalize(sourceLeaf));
-      if (!target) return null;
-      return { target, name: target.name + '.' + property };
+      return target ? { target, name: target.name + '.' + property } : null;
     };
 
     return clips
@@ -91,15 +90,13 @@ export class CharacterPackLoader {
           next.name = binding.name;
           tracks.push(next);
         }
-        if (!tracks.length) return null;
-        return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+        return tracks.length ? new THREE.AnimationClip(clip.name, clip.duration, tracks) : null;
       })
       .filter(Boolean);
   }
 
   createMixer(model, clips = []) {
     const mixer = new THREE.AnimationMixer(model);
-    for (const clip of clips) mixer.clipAction(clip).play();
-    return mixer;
+    return { mixer, actions: clips.map(clip => mixer.clipAction(clip)) };
   }
 }
