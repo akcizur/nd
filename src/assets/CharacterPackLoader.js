@@ -15,8 +15,13 @@ export class CharacterPackLoader {
     return gltf;
   }
 
+  async loadPlayer() {
+    return this.load(ASSET_PACKS.characters.models.player);
+  }
+
+  // Backward-compatible alias for older callers.
   async loadUniversal() {
-    return this.load(ASSET_PACKS.characters.models.male);
+    return this.loadPlayer();
   }
 
   async loadAnimationLibrary() {
