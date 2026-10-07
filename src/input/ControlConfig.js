@@ -8,7 +8,7 @@ export const DEFAULT_BINDINGS = Object.freeze({
   crouch: ['KeyC'],
   aim: ['Mouse2'],
   interact: ['KeyE'],
-  handbrake: ['Space'],
+  handbrake: ['KeyJ'],
   pause: ['Escape'],
 });
 
