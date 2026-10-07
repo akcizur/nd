@@ -52,7 +52,6 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 world.add(ground);
 
-// A small grid makes movement and camera orientation immediately readable.
 const grid = new THREE.GridHelper(160, 80, 0x666666, 0x252525);
 grid.position.y = 0.006;
 world.add(grid);
@@ -71,8 +70,6 @@ function createPlayerRig(model, scale = 0.92) {
   const rig = new THREE.Group();
   rig.name = 'PlayerCharacter';
 
-  // Invisible gameplay collider. The visible character never owns gameplay
-  // movement directly; the rig/capsule is the authoritative body.
   const collider = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.34, 1.05, 8, 12),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
@@ -88,8 +85,6 @@ function createPlayerRig(model, scale = 0.92) {
   const bounds = new THREE.Box3().setFromObject(model);
   model.position.y = -bounds.min.y + 0.01;
 
-  // Gobkit C-1 is authored facing +Z. The controller uses -Z as forward,
-  // so compensate exactly once at the visual root.
   model.rotation.y = Math.PI;
   model.traverse(node => {
     if (!node.isMesh) return;
@@ -97,7 +92,7 @@ function createPlayerRig(model, scale = 0.92) {
     node.receiveShadow = true;
   });
 
-  model.name = 'YellowPlayableCharacter';
+  model.name = 'PlayableCharacter';
   rig.add(model);
   rig.position.set(0, 0, 0);
   rig.updateMatrixWorld(true);
@@ -109,28 +104,72 @@ function createPlayerRig(model, scale = 0.92) {
   return rig;
 }
 
-function createFallbackPlayer() {
+function createTestFigure() {
   const visual = new THREE.Group();
-  visual.name = 'YellowPlayableCharacter';
+  visual.name = 'PlayableCharacter';
 
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.28, 0.92, 6, 10),
-    new THREE.MeshStandardMaterial({ color: 0xffd21f, roughness: 0.78 })
-  );
-  body.position.y = 0.72;
-  body.castShadow = true;
-  visual.add(body);
+  const skin = new THREE.MeshStandardMaterial({ color: 0x8ec5ff, roughness: 0.8 });
+  const accent = new THREE.MeshStandardMaterial({ color: 0xffd21f, roughness: 0.75 });
 
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 16, 12),
-    new THREE.MeshStandardMaterial({ color: 0xffd21f, roughness: 0.9 })
-  );
-  head.position.y = 1.44;
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.23, 0.8, 5, 10), skin);
+  torso.position.y = 1.08;
+  torso.castShadow = true;
+  visual.add(torso);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 18), accent);
+  head.position.y = 1.82;
   head.castShadow = true;
   visual.add(head);
 
+  const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.62, 4, 8), skin);
+  leftArm.position.set(-0.38, 1.2, 0);
+  leftArm.rotation.z = 0.35;
+  leftArm.castShadow = true;
+  visual.add(leftArm);
+
+  const rightArm = leftArm.clone();
+  rightArm.position.x = 0.38;
+  rightArm.rotation.z = -0.35;
+  visual.add(rightArm);
+
+  const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.7, 4, 8), skin);
+  leftLeg.position.set(-0.14, 0.38, 0);
+  leftLeg.castShadow = true;
+  visual.add(leftLeg);
+
+  const rightLeg = leftLeg.clone();
+  rightLeg.position.x = 0.14;
+  visual.add(rightLeg);
+
+  visual.userData.testFigure = {
+    torso,
+    head,
+    leftArm,
+    rightArm,
+    leftLeg,
+    rightLeg,
+  };
+
   createPlayerRig(visual, 1);
-  playerAnimation = null;
+  playerAnimation = {
+    update(dt) {
+      const parts = playerVisual?.userData?.testFigure;
+      if (!parts || !playerController) return;
+
+      const swing = Math.sin(performance.now() * 0.008 * (1 + playerController.horizontalSpeed * 0.6)) * 0.7;
+      const speedState = playerController.state;
+      const idleSwing = speedState === 'idle' ? 0.12 : 0.45;
+
+      parts.leftArm.rotation.x = speedState === 'idle' ? 0.15 : swing;
+      parts.rightArm.rotation.x = speedState === 'idle' ? -0.15 : -swing;
+      parts.leftLeg.rotation.x = speedState === 'idle' ? -0.1 : -swing * 1.2;
+      parts.rightLeg.rotation.x = speedState === 'idle' ? 0.1 : swing * 1.2;
+      parts.torso.rotation.z = playerController.horizontalSpeed > 0.1 ? playerController.animationInput.strafe * 0.18 : 0;
+      parts.head.rotation.y = playerController.animationInput.forward * 0.15;
+      parts.head.position.y = 1.82 + (playerController.grounded ? 0 : Math.sin(performance.now() * 0.02) * 0.04);
+    },
+    updateLocomotion() {},
+  };
 }
 
 async function loadPlayer() {
@@ -138,8 +177,6 @@ async function loadPlayer() {
     const gltf = await characterPack.loadPlayer();
     const clips = characterPack.createPlayerClips(gltf);
 
-    // This is the actual yellow Gobkit C-1 asset. Preserve its baked texture;
-    // never recolor another model and never display the other variants.
     createPlayerRig(gltf.scene, 2.4);
 
     if (clips.length) {
@@ -150,10 +187,10 @@ async function loadPlayer() {
 
     return;
   } catch (error) {
-    console.warn('Yellow C-1 player failed:', error);
+    console.warn('Yellow C-1 player failed, using test figure fallback:', error);
   }
 
-  createFallbackPlayer();
+  createTestFigure();
 }
 
 const input = new InputManager();
