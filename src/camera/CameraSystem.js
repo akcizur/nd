@@ -13,14 +13,14 @@ export class CameraSystem {
     this.sensitivityY = 1.6;
     this.invertX = false;
     this.invertY = false;
-    this.fovBase = 65;
+    this.fovBase = 60;
 
-    this.distance = 6.5;
-    this.height = 2.7;
+    this.distance = 5.8;
+    this.height = 2.45;
     this.targetHeight = 1.1;
 
-    this.positionSharpness = 12;
-    this.rotationFollowSharpness = 4.5;
+    this.positionSharpness = 14;
+    this.rotationFollowSharpness = 5.5;
     this.pitchMin = -0.18;
     this.pitchMax = 0.82;
 
@@ -42,8 +42,9 @@ export class CameraSystem {
     const hasManualLook = look.x * look.x + look.y * look.y > 0.0005;
 
     if (hasManualLook) {
-      this.yaw -= look.x * this.sensitivityX * dt * 3.2 * (this.invertX ? -1 : 1);
-      this.pitch += look.y * this.sensitivityY * dt * 2.1 * (this.invertY ? -1 : 1);
+      const factor = input?.lookSource === 'mouse' ? 1 : dt * 2.8;
+      this.yaw -= look.x * this.sensitivityX * factor * (this.invertX ? -1 : 1);
+      this.pitch += look.y * this.sensitivityY * factor * (this.invertY ? -1 : 1);
       this.pitch = THREE.MathUtils.clamp(this.pitch, this.pitchMin, this.pitchMax);
       this.autoFollowTimer = 0;
     } else {
