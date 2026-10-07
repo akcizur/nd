@@ -12,6 +12,7 @@ export class PlayerController {
     this.horizontalVelocity = new THREE.Vector3();
     this.grounded = true;
     this.state = 'idle';
+    this.animationInput = { forward: 0, strafe: 0, magnitude: 0 };
 
     this.walkSpeed = 3.8;
     this.runSpeed = 6.2;
@@ -71,6 +72,10 @@ export class PlayerController {
     }
 
     const desiredDirection = forward.multiplyScalar(move.y).add(right.multiplyScalar(move.x));
+    // Preserve raw controls before the character rotates toward movement.
+    this.animationInput.forward = move.y;
+    this.animationInput.strafe = move.x;
+    this.animationInput.magnitude = magnitude;
     if (desiredDirection.lengthSq() > 1) desiredDirection.normalize();
 
     const targetVelocity = desiredDirection.multiplyScalar(speed * magnitude);
