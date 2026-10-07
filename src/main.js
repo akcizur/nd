@@ -620,6 +620,7 @@ function updatePlayer(dt) {
     forward: animationInput.forward,
     strafe: animationInput.strafe,
     crouched: Boolean(playerController.input.crouch),
+    sprinting: Boolean(playerController.input.sprint),
     dt,
   });
 
