@@ -1,76 +1,248 @@
 # ND
 
-Three.js / Vite browser 3D city-game prototype.
+Minimal Three.js / Vite **third-person character movement prototype** for the browser.
+
+The project is currently focused on one thing: making character movement and third-person camera control feel like a real game before adding a larger world or gameplay systems.
 
 ## Current game foundation
 
-- third-person drivable vehicle
-- keyboard and mobile/touch controls
-- acceleration, reverse, steering and inertia
-- static building collision
-- checkpoint mission loop
-- score + distance HUD
-- procedural city layout
-- Kenney City Kit Roads
-- Kenney City Kit Suburban
-- Kenney City Kit Commercial
-- CC0 GLB assets loaded directly in the browser
-- distance fog, shadows and follow camera
+- third-person humanoid character
+- camera-relative character movement
+- smooth character rotation toward movement direction
+- walk / run / sprint movement bands
+- acceleration and deceleration
+- jump / fall / grounded state
+- third-person orbit / follow camera
+- camera pitch limits
+- dynamic camera FOV based on movement speed
+- keyboard + mouse controls
+- touch / virtual joystick controls
+- gamepad input
+- responsive desktop and mobile layout
+- animated character loading with idle / locomotion clips
+- animation state machine driven by actual movement speed
+- simple flat test ground
+- lightweight scene designed for movement testing
 - GitHub Pages deployment
-- MavonEngine Core dependency prepared for the next gameplay/physics layer
-- rigged third-person player character
-- Idle / Walk / Run animation state machine
-- CC0 rigged NPC character pack
-- skeleton-aware NPC cloning
+- Vite production build
 
-## Free asset kits
+## Current scope
 
-The city uses free CC0 Kenney assets:
+The scene is intentionally minimal.
 
-- City Kit (Roads)
-- City Kit (Suburban)
-- City Kit (Commercial)
+```text
+┌──────────────────────────────────────┐
+│                                      │
+│             THIRD-PERSON             │
+│                                      │
+│                 ◯                    │
+│                /|\                   │
+│                / \                   │
+│                                      │
+│          SIMPLE TEST GROUND          │
+│                                      │
+└──────────────────────────────────────┘
+```
 
-The models are loaded from the public Bevy/Kenney asset mirror at runtime, so the repository stays small. Kenney's City Kit packs are CC0 and may be used commercially. Attribution is not required.
+There are currently no city, vehicle, NPC, mission or inventory systems in the active movement prototype.
 
-## Gameplay foundation
+The goal is to establish a solid character-controller foundation first.
 
-The first loop is deliberately small:
+## Movement model
 
-1. spawn in the city
-2. drive to the yellow checkpoint
-3. complete five checkpoints
-4. receive 100 points per checkpoint
-5. after the final checkpoint, continue in free roam
+```text
+Input
+  ↓
+Camera-relative direction
+  ↓
+Acceleration / deceleration
+  ↓
+Character velocity
+  ↓
+Smooth character rotation
+  ↓
+Animation state
+```
 
-This gives the project a real gameplay state instead of only a rendering demo.
+Movement is based on the camera yaw, so pressing **W** moves the character in the direction the camera is facing.
+
+Diagonal movement is normalized to prevent diagonal speed from becoming faster than forward movement.
 
 ## Controls
 
-- W / Arrow Up — accelerate
-- S / Arrow Down — reverse / brake
-- A / Arrow Left — steer left
-- D / Arrow Right — steer right
-- Touch arrows — mobile/tablet driving
+### Desktop
+
+| Input | Action |
+|---|---|
+| W / ↑ | Move forward |
+| S / ↓ | Move backward |
+| A / ← | Strafe left |
+| D / → | Strafe right |
+| Shift | Sprint |
+| Space | Jump |
+| RMB + mouse | Rotate camera |
+| Esc | Game menu |
+
+### Mobile / touch
+
+| Control | Action |
+|---|---|
+| Left joystick | Character movement |
+| Right joystick | Camera |
+| Sprint | Sprint |
+| Jump | Jump |
+| E / Enter | Interaction |
+
+### Gamepad
+
+The input layer supports:
+
+- left stick — movement
+- right stick — camera
+- gamepad sprint
+- jump
+- pause
+
+## Camera
+
+The camera is a dedicated third-person system.
+
+- smooth follow
+- orbit around the player
+- controlled pitch range
+- movement-aware FOV
+- manual mouse orbit
+- touch/gamepad camera input
+- automatic follow when the player moves without manual camera input
+- camera stays above the ground plane
+
+## Character
+
+The character pipeline supports:
+
+- GLTF / GLB humanoid models
+- CC0 character assets
+- idle animation
+- walk / run locomotion
+- runtime animation binding
+- animation state transitions based on actual horizontal velocity
+
+The controller is intentionally independent from the final character asset, so the model can be replaced without rewriting movement logic.
+
+## Project architecture
+
+```text
+src/
+├── animation/       Animation state and locomotion
+├── assets/          Character / asset loading
+├── camera/          Third-person camera
+├── core/            Game state, input facade and debug
+├── input/           Keyboard, mouse, gamepad and touch input
+├── mobile/          Virtual joystick and touch controls
+├── player/          Character movement controller
+├── ui/              Menus and HUD
+└── main.js          Scene bootstrap and game loop
+```
+
+The important runtime separation is:
+
+```text
+Input → PlayerController → Character
+                    ↘
+                     AnimationSystem
+
+Camera ← Input + Player
+```
 
 ## Development
 
+Install dependencies:
+
+```bash
 npm install
+```
+
+Run the local development server:
+
+```bash
 npm run dev
+```
 
-## Production
+Build the production version:
 
+```bash
 npm run build
+```
 
-GitHub Pages uses the production base path `/nd/`.
+Preview the production build locally:
 
-## Engine direction
+```bash
+npm run preview
+```
 
-MavonEngine is included as the target gameplay engine layer. It provides a shared entity system, state machine, Rapier physics and a path toward server-authoritative multiplayer. The current Pages build remains a static client prototype; server/networking can be added separately without blocking the client.
+## Production / GitHub Pages
+
+The project is deployed as a static Vite application through GitHub Pages.
+
+Production base path:
+
+```text
+/nd/
+```
+
+Deployment is handled by GitHub Actions after changes are pushed to `main`.
+
+## Development priorities
+
+### P0 — Movement foundation
+
+- character scale
+- feet correctly grounded
+- acceleration / deceleration feel
+- camera-relative movement
+- smooth facing
+- walk / run / sprint blending
+- stable third-person camera
+- camera collision
+
+### P1 — Character quality
+
+- better locomotion blending
+- foot-skate reduction
+- landing transitions
+- crouch locomotion
+- improved touch controls
+
+### P2 — World
+
+- simple streets
+- low-poly buildings
+- basic collision
+- interactive world objects
+
+### P3 — Gameplay
+
+- vehicles
+- NPCs
+- missions
+- inventory
+- survival systems
+
+World and gameplay systems should only be added after the P0 movement foundation feels reliable.
+
+## Design principle
+
+**Character movement first. World second. Gameplay third.**
+
+The repository is intentionally kept small while the controller, camera and animation foundation are being stabilized.
+
+## License / assets
+
+Game code and bundled assets should be checked individually before redistribution.
+
+Third-party assets retain their original licenses and attribution requirements.
 
 ## Sources
 
-- Kenney City Kit Roads — https://kenney.nl/assets/city-kit-roads
-- Kenney City Kit Suburban — https://kenney.nl/assets/city-kit-suburban
-- Kenney City Kit Industrial — https://kenney.nl/assets/city-kit-industrial
-- MavonEngine Core — https://github.com/MavonEngine/Core
+- Three.js — https://threejs.org/
+- Vite — https://vite.dev/
