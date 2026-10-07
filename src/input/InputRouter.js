@@ -258,8 +258,8 @@ export class InputRouter {
 
     if (this.mouseLookDelta.x || this.mouseLookDelta.y) {
       // Mouse orbit is already a frame delta; keep it small and smooth.
-      lookX = this._clamp(this.mouseLookDelta.x * 0.012);
-      lookY = this._clamp(this.mouseLookDelta.y * 0.012);
+      lookX = this._clamp(this.mouseLookDelta.x * 0.004);
+      lookY = this._clamp(this.mouseLookDelta.y * 0.004);
     } else {
       lookX = this.touchLook.x;
       lookY = this.touchLook.y;
@@ -297,6 +297,7 @@ export class InputRouter {
 
     this.input.setMove(move.x, move.y);
     this.input.setLook(look.x, look.y);
+    this.input.lookSource = this.mouseLookDelta.x || this.mouseLookDelta.y ? 'mouse' : 'touch';
 
     this.input.setAction(
       'sprint',
