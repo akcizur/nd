@@ -6,13 +6,15 @@ export class AnimationSystem {
     this.mixer = null;
     this.actions = {};
     this.state = null;
+    this.previousState = null;
     this.upperBody = null;
-    this.jumpStartedAt = 0;
+    this.landedPulse = 0;
     this.locomotion = {
       enabled: false,
-      current: null,
+      current: 'idle',
       speed: 0,
       maxSpeed: 1,
+      normalizedSpeed: 0,
       grounded: true,
       direction: 0,
       blend: 0,
@@ -34,101 +36,163 @@ export class AnimationSystem {
       ['left', /^(?:left|strafeleft)$/],
       ['right', /^(?:right|straferight)$/],
     ];
+
     for (const [alias, pattern] of rules) {
       if (pattern.test(key) && !this.actions[alias]) this.actions[alias] = action;
     }
   }
 
-  bind(mixer, clips) {
+  _registerClip(clip) {
+    const key = this._key(clip.name);
+    const action = this.mixer.clipAction(clip);
+    this.actions[key] = action;
+    this._aliasDirectional(key, action);
+
+    const aliases = [];
+    if (/idle|stand|breath/.test(key)) aliases.push('idle');
+    if (/walk|walking|locomotion/.test(key) && !/back|strafe/.test(key)) aliases.push('walk');
+    if (/run|running|jog/.test(key) && !/back|strafe/.test(key)) aliases.push('run');
+    if (/sprint/.test(key)) aliases.push('sprint');
+    if (/jumpstart|takeoff|jump/.test(key)) aliases.push('jump');
+    if (/jumploop|fall|airborne/.test(key)) aliases.push('fall');
+    if (/land|landing/.test(key)) aliases.push('land');
+    if (/crouch|crouching/.test(key)) aliases.push('crouch');
+
+    for (const alias of aliases) {
+      if (!this.actions[alias]) this.actions[alias] = action;
+    }
+  }
+
+  bind(mixer, clips = []) {
     this.mixer = mixer;
     this.actions = {};
-    for (const clip of clips) {
-      const key = this._key(clip.name);
-      this.actions[key] = mixer.clipAction(clip);
-      this._aliasDirectional(key, this.actions[key]);
-    }
 
-    for (const [key, action] of Object.entries(this.actions)) {
-      if (/idle|stand|breath/.test(key) && !this.actions.idle) this.actions.idle = action;
-      if (/walk|walking/.test(key) && !this.actions.walk) this.actions.walk = action;
-      if (/run|running|jog/.test(key) && !this.actions.run) this.actions.run = action;
-      if (/sprint/.test(key) && !this.actions.sprint) this.actions.sprint = action;
-      if (/jumpstart|jump/.test(key) && !this.actions.jump) this.actions.jump = action;
-      if (/jumploop|fall|airborne/.test(key) && !this.actions.fall) this.actions.fall = action;
-      if (/crouch|crouching/.test(key) && !this.actions.crouch) this.actions.crouch = action;
-    }
+    for (const clip of clips) this._registerClip(clip);
 
     if (!this.actions.idle) {
-      this.actions.idle = this.actions.stand || this.actions.breath || Object.values(this.actions)[0] || null;
+      this.actions.idle = this.actions.stand ||
+        this.actions.breath ||
+        Object.values(this.actions)[0] ||
+        null;
     }
+
     if (!this.actions.walk) this.actions.walk = this.actions.run || null;
     if (!this.actions.run) this.actions.run = this.actions.walk || null;
     if (!this.actions.sprint) this.actions.sprint = this.actions.run || null;
+    if (!this.actions.fall) this.actions.fall = this.actions.jump || null;
 
     this._configureLooping();
-    if (this.actions.idle) this.play('idle', 0);
+    this.state = null;
+
+    if (this.actions.idle) this._transition('idle', 0);
+    this.locomotion.enabled = Boolean(this.actions.idle);
   }
 
   addClips(clips = []) {
     if (!this.mixer) return;
-    for (const clip of clips) {
-      const key = this._key(clip.name);
-      this.actions[key] = this.mixer.clipAction(clip);
-      this._aliasDirectional(key, this.actions[key]);
-      const aliases = [];
-      if (/idle|stand|breath/.test(key)) aliases.push('idle');
-      if (/walk|walking|locomotion/.test(key)) aliases.push('walk');
-      if (/run|running|jog/.test(key)) aliases.push('run');
-      if (/sprint/.test(key)) aliases.push('sprint');
-      if (/jumpstart|jump/.test(key)) aliases.push('jump');
-      if (/jumploop|fall|airborne/.test(key)) aliases.push('fall');
-      if (/crouch|crouching/.test(key)) aliases.push('crouch');
-      for (const alias of aliases) if (!this.actions[alias]) this.actions[alias] = this.mixer.clipAction(clip);
-    }
+    for (const clip of clips) this._registerClip(clip);
+    if (!this.actions.walk) this.actions.walk = this.actions.run || null;
+    if (!this.actions.run) this.actions.run = this.actions.walk || null;
+    if (!this.actions.sprint) this.actions.sprint = this.actions.run || null;
     this._configureLooping();
   }
 
   _configureLooping() {
     const unique = new Set(Object.values(this.actions).filter(Boolean));
+
     for (const action of unique) {
+      action.enabled = false;
       action.setLoop(THREE.LoopRepeat, Infinity);
       action.clampWhenFinished = false;
+      action.setEffectiveWeight(0);
+      action.setEffectiveTimeScale(1);
     }
-    if (this.actions.jump) {
-      this.actions.jump.setLoop(THREE.LoopOnce, 1);
-      this.actions.jump.clampWhenFinished = true;
+
+    for (const key of ['jump', 'land']) {
+      if (!this.actions[key]) continue;
+      this.actions[key].setLoop(THREE.LoopOnce, 1);
+      this.actions[key].clampWhenFinished = true;
     }
   }
 
   _resolve(name) {
     const key = this._key(name);
     if (this.actions[key]) return key;
+
     const aliases = {
-      sprint: ['run', 'walk'],
+      idle: ['stand', 'breath'],
+      walk: ['run', 'idle'],
+      run: ['walk', 'sprint', 'idle'],
+      sprint: ['run', 'walk', 'idle'],
       crouch: ['walk', 'idle'],
-      jump: ['run', 'idle'],
-      fall: ['run', 'idle'],
-      turn: ['walk', 'idle'],
+      jump: ['fall', 'run', 'walk', 'idle'],
+      fall: ['jump', 'run', 'walk', 'idle'],
+      land: ['idle', 'walk', 'run'],
     };
+
     return (aliases[key] || []).find(alias => this.actions[alias]) || null;
   }
 
-  play(name, fade = 0.16) {
-    if (!this.mixer) return false;
+  _uniqueActions() {
+    return [...new Set(Object.values(this.actions).filter(Boolean))];
+  }
+
+  _transition(name, fade = 0.14, { restart = true } = {}) {
     const resolved = this._resolve(name);
-    if (!resolved || this.state === resolved) return Boolean(resolved);
+    if (!resolved) return false;
+
     const next = this.actions[resolved];
     const current = this.actions[this.state];
-    if (current) current.fadeOut(fade);
-    next.reset().fadeIn(fade).play();
+
+    if (current === next && this.state === resolved) {
+      next.enabled = true;
+      return true;
+    }
+
+    this.previousState = this.state;
+    this.state = resolved;
+
+    if (current && current !== next) {
+      current.fadeOut(fade);
+    }
+
+    next.enabled = true;
+    next.setEffectiveWeight(0);
+    if (restart) next.reset();
+    next.fadeIn(fade).play();
+
+    return true;
+  }
+
+  _playOneShot(name) {
+    const resolved = this._resolve(name);
+    if (!resolved) return false;
+
+    const action = this.actions[resolved];
+    action.enabled = true;
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.setEffectiveWeight(1);
+    action.play();
     this.state = resolved;
     return true;
   }
 
-  _directionAction(forward, strafe) {
-    const hasDirectional = this.actions.forward || this.actions.backward ||
-      this.actions.left || this.actions.right;
-    if (!hasDirectional) return null;
+  _selectDirectional(forward, strafe) {
+    const directional = {
+      forwardLeft: this.actions.forwardLeft,
+      forwardRight: this.actions.forwardRight,
+      backwardLeft: this.actions.backwardLeft,
+      backwardRight: this.actions.backwardRight,
+      forward: this.actions.forward,
+      backward: this.actions.backward,
+      left: this.actions.left,
+      right: this.actions.right,
+    };
+
+    const hasAny = Object.values(directional).some(Boolean);
+    if (!hasAny) return null;
 
     const angle = Math.atan2(strafe, forward);
     const octant = Math.round(angle / (Math.PI / 4));
@@ -137,97 +201,135 @@ export class AnimationSystem {
       'forward', 'forwardRight', 'right', 'backwardRight',
       'backward', 'backwardLeft', 'left', 'forwardLeft',
     ];
-    const candidates = {
-      forwardRight: ['forwardRight', 'forward'],
-      backwardRight: ['backwardRight', 'backward'],
-      backwardLeft: ['backwardLeft', 'backward'],
-      forwardLeft: ['forwardLeft', 'forward'],
-      right: ['right', 'forward'],
-      left: ['left', 'forward'],
+
+    const preferred = names[index];
+    const fallback = {
+      forwardRight: ['forward'],
+      backwardRight: ['backward', 'forward'],
+      backwardLeft: ['backward', 'forward'],
+      forwardLeft: ['forward'],
+      right: ['forward'],
+      left: ['forward'],
     };
-    const name = names[index];
-    if (this.actions[name]) return this.actions[name];
-    return (candidates[name] || [name]).map(key => this.actions[key]).find(Boolean) || null;
+
+    return directional[preferred] ||
+      (fallback[preferred] || []).map(key => directional[key]).find(Boolean) ||
+      null;
   }
 
   updateLocomotion({
     speed = 0,
     maxSpeed = 8.4,
     grounded = true,
+    verticalVelocity = 0,
     dt = 1 / 60,
     forward = 1,
     strafe = 0,
     crouched = false,
+    sprinting = false,
   } = {}) {
     if (!this.mixer || !this.actions.idle) return;
 
-    const normalized = Math.max(0, Math.min(1, speed / Math.max(0.01, maxSpeed)));
-    const smoothing = 1 - Math.exp(-12 * dt);
-
-    // Prefer the canonical locomotion clips. Directional clips are used only
-    // when the pack does not provide a normal walk/run set; otherwise a
-    // directional alias can accidentally mask the reliable base locomotion.
-    const walk = this.actions.walk || null;
-    const run = this.actions.run || walk;
-    const sprint = this.actions.sprint || run;
+    const safeMax = Math.max(0.01, maxSpeed);
+    const normalized = THREE.MathUtils.clamp(speed / safeMax, 0, 1);
+    const smoothing = 1 - Math.exp(-14 * dt);
 
     let target = 'idle';
+
+    // Highest priority: airborne state. A jump clip is committed once;
+    // after its authored takeoff it hands off to fall without restarting.
     if (!grounded) {
-      target = speed > 0.05
-        ? (this.actions.jump ? 'jump' : (this.actions.fall ? 'fall' : 'idle'))
-        : (this.actions.fall ? 'fall' : (this.actions.jump ? 'jump' : 'idle'));
+      if (verticalVelocity > 0.15 && this.actions.jump) {
+        target = 'jump';
+      } else if (this.actions.fall) {
+        target = 'fall';
+      } else {
+        target = 'jump';
+      }
+    } else if (this.locomotion.grounded === false && this.actions.land) {
+      // A short landing state gives the feet a deterministic recovery pose.
+      target = 'land';
     } else if (crouched) {
-      target = this.actions.crouch ? 'crouch' : (walk ? 'walk' : 'idle');
-    } else if (normalized >= 0.78 && sprint) {
-      target = 'sprint';
-    } else if (normalized >= 0.05 && walk) {
-      target = normalized >= 0.58 && run ? 'run' : 'walk';
+      target = this.actions.crouch ? 'crouch' : 'walk';
+    } else if (speed < 0.12) {
+      target = 'idle';
+    } else if (sprinting || normalized >= 0.78) {
+      target = this.actions.sprint ? 'sprint' : 'run';
+    } else if (normalized >= 0.52) {
+      target = this.actions.run ? 'run' : 'walk';
+    } else {
+      target = 'walk';
     }
 
-    const resolved = this._resolve(target) || this._resolve('idle');
-    if (resolved) {
-      const next = this.actions[resolved];
+    // Directional clips are used only for grounded locomotion and only when
+    // they are explicitly present in the loaded animation pack.
+    const directional = grounded && speed > 0.12
+      ? this._selectDirectional(forward, strafe)
+      : null;
+
+    const canonical = this._resolve(target);
+    const desired = directional && !['idle', 'land', 'crouch'].includes(target)
+      ? directional
+      : (canonical ? this.actions[canonical] : null);
+
+    if (desired) {
       const current = this.actions[this.state];
 
-      if (current !== next) {
-        if (current) current.fadeOut(Math.min(0.18, dt * 4));
-        next.reset().fadeIn(Math.min(0.18, dt * 4)).play();
-        this.state = resolved;
-      } else if (!next.isRunning()) {
-        next.play();
+      if (current !== desired) {
+        if (current) current.fadeOut(Math.min(0.16, Math.max(0.06, dt * 5)));
+        desired.enabled = true;
+        desired.setEffectiveWeight(0);
+        desired.reset();
+        desired.fadeIn(Math.min(0.16, Math.max(0.06, dt * 5))).play();
+
+        const entry = Object.entries(this.actions).find(([, action]) => action === desired);
+        this.previousState = this.state;
+        this.state = entry?.[0] || canonical || target;
+      } else if (!desired.isRunning() && !['jump', 'fall', 'land'].includes(this.state)) {
+        desired.play();
       }
 
-      next.enabled = true;
-      next.weight += (1 - next.weight) * smoothing;
+      desired.enabled = true;
+      desired.setEffectiveWeight(
+        THREE.MathUtils.damp(desired.getEffectiveWeight(), 1, 14, dt)
+      );
     }
 
-    // Keep all non-selected locomotion actions silent. This avoids two clips
-    // fighting over the same skeleton, which is especially important for
-    // retargeted GLTF tracks.
-    const selected = this.actions[this.state];
-    const uniqueActions = new Set(Object.values(this.actions).filter(Boolean));
-    for (const action of uniqueActions) {
+    const selected = desired;
+    for (const action of this._uniqueActions()) {
       if (action === selected) continue;
-      action.weight += (0 - action.weight) * smoothing;
-      if (action.weight < 0.001) action.enabled = false;
+      action.setEffectiveWeight(
+        THREE.MathUtils.damp(action.getEffectiveWeight(), 0, 16, dt)
+      );
+      if (action.getEffectiveWeight() < 0.001) action.enabled = false;
     }
 
     if (selected) {
-      const rate = this.state === 'sprint'
-        ? Math.max(0.75, speed / 8.4)
-        : this.state === 'run'
-          ? Math.max(0.7, speed / 6.2)
-          : this.state === 'walk'
-            ? Math.max(0.7, speed / 3.8)
-            : 1;
-      selected.timeScale = rate;
+      const gait = this.state === 'sprint' ? 8.4 :
+        this.state === 'run' ? 6.2 :
+        this.state === 'walk' ? 3.8 : 4.0;
+      selected.timeScale = ['walk', 'run', 'sprint'].includes(this.state)
+        ? THREE.MathUtils.clamp(speed / gait, 0.72, 1.8)
+        : 1;
+    }
+
+    // A one-shot jump must never be restarted every frame. Once it has
+    // finished, the state machine can move to fall/land on the next update.
+    if (this.state === 'jump' && selected && !selected.isRunning() && grounded === false) {
+      this.state = this.actions.fall ? 'fall' : this.state;
+    }
+
+    if (this.state === 'land' && selected && !selected.isRunning()) {
+      this.state = null;
     }
 
     this.locomotion.speed = speed;
-    this.locomotion.maxSpeed = maxSpeed;
+    this.locomotion.maxSpeed = safeMax;
+    this.locomotion.normalizedSpeed = normalized;
     this.locomotion.grounded = grounded;
     this.locomotion.direction = Math.atan2(strafe, forward);
     this.locomotion.blend += (normalized - this.locomotion.blend) * smoothing;
+    this.locomotion.current = target;
   }
 
   setUpperBody(action) {
