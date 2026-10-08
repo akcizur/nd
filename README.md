@@ -19,7 +19,7 @@ The project is currently focused on one thing: making character movement and thi
 - touch / virtual joystick controls
 - gamepad input
 - responsive desktop and mobile layout
-- animated character loading with idle / locomotion clips
+- Quaternius Universal Base Character loading with shared Universal Animation Library locomotion clips
 - animation state machine driven by actual movement speed
 - simple flat test ground
 - lightweight scene designed for movement testing
@@ -120,11 +120,11 @@ The camera is a dedicated third-person system.
 
 The character pipeline supports:
 
-- GLTF / GLB humanoid models
+- Quaternius GLTF / GLB humanoid models
 - CC0 character assets
-- idle animation
-- walk / run locomotion
-- runtime animation binding
+- shared Universal Animation Library locomotion
+- idle / walk / run / sprint / jump / fall animation states
+- runtime animation retargeting by humanoid bone name
 - animation state transitions based on actual horizontal velocity
 
 The controller is intentionally independent from the final character asset, so the model can be replaced without rewriting movement logic.
@@ -208,6 +208,7 @@ Deployment is handled by GitHub Actions after changes are pushed to `main`.
 ### P1 — Character quality
 
 - better locomotion blending
+- Quaternius UAL clip coverage
 - foot-skate reduction
 - landing transitions
 - crouch locomotion
