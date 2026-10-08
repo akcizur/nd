@@ -19,7 +19,7 @@ export class CharacterPackLoader {
   }
 
   async loadAnimationLibrary() {
-    return this.loadPlayer();
+    return this.load(ASSET_PACKS.animations.models.locomotion);
   }
 
   clone(gltf, position = new THREE.Vector3(), scale = 1) {
@@ -36,14 +36,7 @@ export class CharacterPackLoader {
   }
 
   createPlayerClips(gltf) {
-    const master = gltf?.animations?.[0];
-    if (!master) return [];
-
-    return [
-      THREE.AnimationUtils.subclip(master, 'idle', 0, 30, 24),
-      THREE.AnimationUtils.subclip(master, 'attack', 30, 60, 24),
-      THREE.AnimationUtils.subclip(master, 'dead', 60, 90, 24),
-    ];
+    return gltf?.animations?.filter(Boolean) ?? [];
   }
 
   retargetClips(clips, targetRoot) {
@@ -90,7 +83,9 @@ export class CharacterPackLoader {
           next.name = binding.name;
           tracks.push(next);
         }
-        return tracks.length ? new THREE.AnimationClip(clip.name, clip.duration, tracks) : null;
+        return tracks.length
+          ? new THREE.AnimationClip(clip.name, clip.duration, tracks)
+          : null;
       })
       .filter(Boolean);
   }
