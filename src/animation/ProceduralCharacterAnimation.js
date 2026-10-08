@@ -50,6 +50,7 @@ export class ProceduralCharacterAnimation {
       forward,
       strafe,
       sprinting,
+      crouched,
     };
 
     this.previousGrounded = grounded;
@@ -60,6 +61,8 @@ export class ProceduralCharacterAnimation {
       this.state = verticalVelocity > 0.05 ? 'jump' : 'fall';
     } else if (this.landTimer > 0) {
       this.state = 'land';
+    } else if (crouched) {
+      this.state = 'crouch';
     } else if (speed < 0.10) {
       this.state = 'idle';
     } else if (sprinting || speed > 5.8) {
@@ -208,6 +211,27 @@ export class ProceduralCharacterAnimation {
     }
   }
 
+  _updateCrouch(dt) {
+    const r = this.rig;
+    const wave = Math.sin(this.time * 2.2) * 0.012;
+
+    this._setRotation(r.legs.left, -0.48 + wave, 0, 0, 16, dt);
+    this._setRotation(r.legs.right, -0.48 - wave, 0, 0, 16, dt);
+    this._setRotation(r.shins.left, 0.72, 0, 0, 16, dt);
+    this._setRotation(r.shins.right, 0.72, 0, 0, 16, dt);
+    this._setRotation(r.feet.left, -0.18, 0, 0, 16, dt);
+    this._setRotation(r.feet.right, -0.18, 0, 0, 16, dt);
+
+    this._setRotation(r.upperArm.left, 0.30, 0, -0.06, 12, dt);
+    this._setRotation(r.upperArm.right, 0.30, 0, 0.06, 12, dt);
+    this._setRotation(r.forearm.left, -0.18, 0, 0, 12, dt);
+    this._setRotation(r.forearm.right, -0.18, 0, 0, 12, dt);
+
+    this._setRotation(r.spine, 0.15, this.locomotion.strafe * 0.035, 0, 12, dt);
+    this._setRotation(r.chest, 0.04 + wave, 0, 0, 12, dt);
+    this._setPositionY(this.model, -0.055, 14, dt);
+  }
+
   _updateAir(dt) {
     const r = this.rig;
     const isJump = this.state === 'jump';
@@ -254,6 +278,8 @@ export class ProceduralCharacterAnimation {
       this._updateAir(dt);
     } else if (this.state === 'land') {
       this._updateLand(dt);
+    } else if (this.state === 'crouch') {
+      this._updateCrouch(dt);
     } else if (this.state === 'idle') {
       this._updateIdle(dt);
     } else {
