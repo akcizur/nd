@@ -1,0 +1,21 @@
+import * as THREE from 'three';
+export class Input{
+ readonly move=new THREE.Vector2(); readonly look=new THREE.Vector2(); run=false; crouch=false;
+ private keys=new Set<string>(); private jumpQueued=false; private resetQueued=false; private menuQueued=false; private pointerLocked=false; private mouseLook=new THREE.Vector2(); private touchMove=new THREE.Vector2(); private touchLook=new THREE.Vector2(); private touchRun=false; private movePointerId:number|null=null; private lookPointerId:number|null=null;
+ constructor(private readonly canvas:HTMLElement){
+   const moveEl=document.querySelector<HTMLElement>('[data-stick="move"]'); const lookEl=document.querySelector<HTMLElement>('[data-stick="look"]');
+   const moveKnob=moveEl?.querySelector<HTMLElement>('.stick-knob')??null, lookKnob=lookEl?.querySelector<HTMLElement>('.stick-knob')??null;
+   window.addEventListener('keydown',e=>this.key(e,true)); window.addEventListener('keyup',e=>this.key(e,false)); window.addEventListener('blur',()=>this.keys.clear());
+   canvas.addEventListener('click',()=>{if(window.matchMedia('(pointer:fine)').matches&&document.pointerLockElement!==canvas)void canvas.requestPointerLock?.()});
+   document.addEventListener('pointerlockchange',()=>{this.pointerLocked=document.pointerLockElement===canvas});
+   document.addEventListener('mousemove',e=>{if(this.pointerLocked){this.mouseLook.x+=e.movementX;this.mouseLook.y+=e.movementY;}});
+   this.stick(moveEl,moveKnob,'move'); this.stick(lookEl,lookKnob,'look');
+   document.querySelector('[data-touch="jump"]')?.addEventListener('pointerdown',()=>{this.jumpQueued=true});
+   const run=document.querySelector('[data-touch="run"]'); run?.addEventListener('pointerdown',()=>{this.touchRun=true}); run?.addEventListener('pointerup',()=>{this.touchRun=false}); run?.addEventListener('pointercancel',()=>{this.touchRun=false});
+   document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{this.resetQueued=true}); document.querySelector('[data-action="resume"]')?.addEventListener('click',()=>{this.menuQueued=true});
+ }
+ update(){this.move.set((this.keys.has('KeyD')||this.keys.has('ArrowRight')?1:0)-(this.keys.has('KeyA')||this.keys.has('ArrowLeft')?1:0),(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0));if(this.move.lengthSq()>1)this.move.normalize();this.move.add(this.touchMove).clampLength(0,1);this.look.set(this.mouseLook.x*.9,this.mouseLook.y*.9).add(this.touchLook);this.mouseLook.set(0,0);this.touchLook.multiplyScalar(.86);this.look.clampLength(0,1.6);this.run=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||this.touchRun;}
+ consumeJump(){if(!this.jumpQueued)return false;this.jumpQueued=false;return true;} consumeReset(){if(!this.resetQueued)return false;this.resetQueued=false;return true;} consumeMenu(){if(!this.menuQueued)return false;this.menuQueued=false;return true;}
+ private key(e:KeyboardEvent,down:boolean){if(down)this.keys.add(e.code);else this.keys.delete(e.code);if(down&&e.code==='Space')this.jumpQueued=true;if(down&&e.code==='KeyC')this.crouch=!this.crouch;if(down&&e.code==='KeyR')this.resetQueued=true;if(down&&e.code==='Escape')this.menuQueued=true;}
+ private stick(el:HTMLElement|null,knob:HTMLElement|null,kind:'move'|'look'){if(!el)return;const radius=43,set=(e:PointerEvent)=>{const r=el.getBoundingClientRect();let x=(e.clientX-(r.left+r.width/2))/radius,y=(e.clientY-(r.top+r.height/2))/radius,l=Math.hypot(x,y);if(l>1){x/=l;y/=l;}if(kind==='move')this.touchMove.set(x,-y);else this.touchLook.set(x*.11,y*.11);if(knob)knob.style.transform=`translate3d(${x*radius}px,${y*radius}px,0)`;},reset=()=>{if(kind==='move'){this.touchMove.set(0,0);this.movePointerId=null;}else{this.touchLook.set(0,0);this.lookPointerId=null;}if(knob)knob.style.transform='translate3d(0,0,0)';};el.addEventListener('pointerdown',e=>{if(kind==='move'&&this.movePointerId!==null)return;if(kind==='look'&&this.lookPointerId!==null)return;if(kind==='move')this.movePointerId=e.pointerId;else this.lookPointerId=e.pointerId;el.setPointerCapture(e.pointerId);set(e);});el.addEventListener('pointermove',e=>{if((kind==='move'?this.movePointerId:this.lookPointerId)!==e.pointerId)return;set(e);});el.addEventListener('pointerup',reset);el.addEventListener('pointercancel',reset);}
+}

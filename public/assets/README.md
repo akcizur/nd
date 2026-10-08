@@ -1,9 +1,12 @@
-# Production Assets
+# FOSS asset policy
 
-This directory contains optimized runtime .glb or .gltf assets.
+No non-FOSS character from the reference repository is bundled here.
 
-Generate files from public/assets-source/ with:
+Recommended FOSS / CC0 sources for future GLB replacements:
 
-npm run assets:optimize
+- Kenney: https://kenney.nl/assets
+- OpenGameArt CC0 3D Characters: https://opengameart.org/content/cc0-3d-characters
+- OpenGameArt CC0 3D Assets: https://opengameart.org/content/3d-assets-cc0
+- OpenGameArt CC0 3D Character Pack: https://opengameart.org/content/3d-character-pack
 
-Do not edit generated assets manually.
+When an asset is added, record exact source URL, title, author and license in `FOSS_ASSETS.md`.

@@ -1,0 +1,2 @@
+export type PlayerState='IDLE'|'WALK'|'RUN'|'JUMP'|'FALL';
+export class GameState{paused=false;playerState:PlayerState='IDLE';speed=0;fps=60;resetRequested=false;reset(){this.resetRequested=true;}consumeReset(){if(!this.resetRequested)return false;this.resetRequested=false;return true;}}
