@@ -17,20 +17,29 @@ export class PlayerController {
 
     this.velocityY = 0;
     this.horizontalVelocity = new THREE.Vector3();
+    this.lastHorizontalVelocity = new THREE.Vector3();
+
     this.grounded = true;
+    this.previousGrounded = true;
     this.state = 'idle';
+    this.justLanded = false;
+    this.justJumped = false;
+
+    this.coyoteTime = 0.1;
+    this.jumpBufferTime = 0.12;
+    this.timeSinceGrounded = 0;
+    this.jumpBufferRemaining = 0;
+
     this.animationInput = { forward: 0, strafe: 0, magnitude: 0 };
 
-    // Real-world-ish human locomotion values in metres / second.
+    // Metres / second for a human-scale 1.8 m character.
     this.walkSpeed = 2.6;
     this.runSpeed = 4.8;
     this.sprintSpeed = 7.0;
 
-    // Ground acceleration/deceleration.
+    // Acceleration is deliberately finite: velocity drives animation speed.
     this.acceleration = 11;
     this.deceleration = 17;
-
-    // Reduced air control prevents the character from steering like a flying pawn.
     this.airAcceleration = 3.0;
 
     this.rotationSharpness = 14;
@@ -47,6 +56,13 @@ export class PlayerController {
     return Math.hypot(this.horizontalVelocity.x, this.horizontalVelocity.z);
   }
 
+  get horizontalAcceleration() {
+    return Math.hypot(
+      this.horizontalVelocity.x - this.lastHorizontalVelocity.x,
+      this.horizontalVelocity.z - this.lastHorizontalVelocity.z
+    );
+  }
+
   setMovementSettings(settings = {}) {
     this.movementSettings = {
       ...this.movementSettings,
@@ -59,9 +75,19 @@ export class PlayerController {
     this.object.position.copy(position);
     this.object.rotation.set(0, yaw, 0);
     this.horizontalVelocity.set(0, 0, 0);
+    this.lastHorizontalVelocity.set(0, 0, 0);
+
     this.velocityY = 0;
     this.grounded = true;
+    this.previousGrounded = true;
     this.state = 'idle';
+    this.justLanded = false;
+    this.justJumped = false;
+
+    this.coyoteTime = 0.1;
+    this.timeSinceGrounded = 0;
+    this.jumpBufferRemaining = 0;
+
     this.animationInput.forward = 0;
     this.animationInput.strafe = 0;
     this.animationInput.magnitude = 0;
@@ -72,7 +98,6 @@ export class PlayerController {
       z: position.z,
     });
 
-    // A controller with a visible visual offset must always be snapped after reset.
     if (this.physicsWorld && this.physicsCharacter) {
       const p = this.physicsCharacter.body.translation();
       this.object.position.set(
@@ -99,12 +124,12 @@ export class PlayerController {
 
     const yaw = this.camera?.yaw ?? this.object.rotation.y;
 
-    // Game forward is -Z. Camera-relative movement uses the same basis.
     const forward = new THREE.Vector3(
       -Math.sin(yaw),
       0,
       -Math.cos(yaw)
     );
+
     const right = new THREE.Vector3(
       Math.cos(yaw),
       0,
@@ -133,14 +158,23 @@ export class PlayerController {
   fixedUpdate(dt) {
     if (!this.physicsWorld || !this.physicsCharacter) return;
 
+    this.justLanded = false;
+    this.justJumped = false;
+    this.previousGrounded = this.grounded;
+    this.lastHorizontalVelocity.copy(this.horizontalVelocity);
+
     const { direction, magnitude, targetSpeed } = this._getDesiredVelocity();
 
     const targetX = direction.x * targetSpeed;
     const targetZ = direction.z * targetSpeed;
 
     const response = this.grounded
-      ? (magnitude > 0.001 ? this.acceleration : this.deceleration)
-      : (magnitude > 0.001 ? this.airAcceleration : 1.2);
+      ? magnitude > 0.001
+        ? this.acceleration
+        : this.deceleration
+      : magnitude > 0.001
+        ? this.airAcceleration
+        : 1.2;
 
     this.horizontalVelocity.x = THREE.MathUtils.damp(
       this.horizontalVelocity.x,
@@ -148,6 +182,7 @@ export class PlayerController {
       response,
       dt
     );
+
     this.horizontalVelocity.z = THREE.MathUtils.damp(
       this.horizontalVelocity.z,
       targetZ,
@@ -155,16 +190,30 @@ export class PlayerController {
       dt
     );
 
-    // Maintain a small downward velocity while grounded so Rapier's
-    // snap-to-ground can keep the feet glued to slopes and steps.
-    if (this.grounded && this.velocityY < 0) {
-      this.velocityY = -1.5;
+    if (this.input.jump) {
+      this.jumpBufferRemaining = this.jumpBufferTime;
+    } else {
+      this.jumpBufferRemaining = Math.max(0, this.jumpBufferRemaining - dt);
     }
 
-    if (this.input.jump && this.grounded) {
+    this.timeSinceGrounded += dt;
+
+    if (this.grounded) {
+      this.timeSinceGrounded = 0;
+    }
+
+    const canCoyoteJump = this.timeSinceGrounded <= this.coyoteTime;
+
+    if (this.jumpBufferRemaining > 0 && canCoyoteJump) {
       this.velocityY = this.jumpSpeed;
       this.grounded = false;
+      this.jumpBufferRemaining = 0;
+      this.justJumped = true;
       this.input.setAction('jump', false);
+    }
+
+    if (this.grounded && this.velocityY < 0) {
+      this.velocityY = -1.5;
     }
 
     this.velocityY -= this.gravity * dt;
@@ -180,9 +229,6 @@ export class PlayerController {
       desiredTranslation
     );
 
-    // Reconcile velocity with actual collision-corrected displacement.
-    // Horizontal velocity is trimmed when a wall blocks it instead of
-    // continuing to "push" the capsule through the collider.
     if (dt > 0) {
       const actualX = result.movement.x / dt;
       const actualZ = result.movement.z / dt;
@@ -199,6 +245,10 @@ export class PlayerController {
 
     if (this.grounded && this.velocityY < 0) {
       this.velocityY = -1.5;
+    }
+
+    if (!this.previousGrounded && this.grounded) {
+      this.justLanded = true;
     }
 
     const horizontalMagnitude = this.horizontalSpeed;
@@ -235,7 +285,10 @@ export class PlayerController {
       grounded: this.grounded,
       speed: this.horizontalSpeed,
       verticalVelocity: this.velocityY,
+      horizontalAcceleration: this.horizontalAcceleration,
       state: this.state,
+      justLanded: this.justLanded,
+      justJumped: this.justJumped,
     };
   }
 }
