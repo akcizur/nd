@@ -1,23 +1,23 @@
-import { ASSET_MANIFEST, assetUrl } from './AssetManifest.js';
-
 export const ASSET_PACKS = {
   characters: {
-    id: 'quaternius-universal-base-characters',
-    name: 'Quaternius Universal Base Characters — Superhero Male',
-    license: ASSET_MANIFEST.characters.player.license,
-    source: 'https://quaternius.itch.io/universal-base-characters',
+    id: 'nd-procedural-humanoid',
+    name: 'ND Procedural Low-Poly Humanoid',
+    license: 'Project-authored',
+    source: 'src/player/SimpleHumanoid.js',
+    type: 'procedural',
     models: {
-      player: assetUrl(ASSET_MANIFEST.characters.player),
+      player: null,
     },
   },
 
   animations: {
-    id: 'quaternius-universal-animation-library',
-    name: 'Quaternius Universal Animation Library — Standard',
-    license: ASSET_MANIFEST.animations.locomotion.license,
-    source: 'https://quaternius.itch.io/universal-animation-library',
+    id: 'nd-procedural-character-animation',
+    name: 'ND Procedural Character Animation',
+    license: 'Project-authored',
+    source: 'src/animation/ProceduralCharacterAnimation.js',
+    type: 'procedural',
     models: {
-      locomotion: assetUrl(ASSET_MANIFEST.animations.locomotion),
+      locomotion: null,
     },
   },
 
@@ -31,19 +31,6 @@ export const ASSET_PACKS = {
       'https://raw.githubusercontent.com/anshaneja5/skyline-run/main/public/assets/models/b_medium.glb',
       'https://raw.githubusercontent.com/anshaneja5/skyline-run/main/public/assets/models/b_large.glb',
     ],
-  },
-
-  animatedCharacters: {
-    id: 'gobkit-free-minions',
-    name: 'Gobkit Free Minions (legacy)',
-    license: 'CC0-1.0',
-    source: 'https://gobkit.itch.io/gobkit-free-minions',
-    status: 'optional',
-    models: {
-      yellow: 'https://gobkit.com/freebies/minion/minion-c01.glb',
-      green: 'https://gobkit.com/freebies/minion/minion-a01.glb',
-      red: 'https://gobkit.com/freebies/minion/minion-b01.glb',
-    },
   },
 };
 
