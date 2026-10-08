@@ -37,11 +37,18 @@ export function assetUrl(entryOrPath) {
     throw new Error('Asset manifest entry has no path');
   }
 
-  if (/^(?:https?:)?\\//i.test(path)) {
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('//')
+  ) {
     return path;
   }
 
-  return new URL(path.replace(/^\\/+/, ''), new URL(BASE, document.baseURI)).href;
+  return new URL(
+    path.replace(/^\/+/, ''),
+    new URL(BASE, document.baseURI)
+  ).href;
 }
 
 export function getAsset(...keys) {
@@ -49,7 +56,10 @@ export function getAsset(...keys) {
 }
 
 export function registerAsset(category, asset) {
-  if (!ASSET_MANIFEST[category]) ASSET_MANIFEST[category] = [];
+  if (!Array.isArray(ASSET_MANIFEST[category])) {
+    ASSET_MANIFEST[category] = [];
+  }
+
   ASSET_MANIFEST[category].push(asset);
   return asset;
 }
