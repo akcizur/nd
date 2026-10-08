@@ -103,9 +103,14 @@ export class CharacterPackLoader {
 
           const property = track.name.slice(dot + 1);
 
-          // Keep authored local rotations/scales and Hips/Pelvis body motion,
-          // but never let a separate skeleton root animate world position.
-          if (property === 'position' && isWorldRoot(target)) continue;
+          // Keep authored local Hips/Pelvis motion for natural locomotion,
+          // but never let a separate skeleton root own gameplay transforms.
+          // The PlayerController/Rapier rig owns world position and facing.
+          if (isWorldRoot(target) && (
+            property === 'position' ||
+            property === 'quaternion' ||
+            property === 'scale'
+          )) continue;
 
           const next = track.clone();
           next.name = target.name + '.' + property;
