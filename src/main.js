@@ -140,7 +140,16 @@ function createPlayerRig(model, targetHeight = 1.8) {
   });
 
   model.name = 'PlayableCharacter';
-  rig.add(model);
+
+  // Keep gameplay orientation/collision separate from the visible character.
+  // This mirrors the useful separation in MaximeCrp's third-person boilerplate:
+  // the actor can turn responsively while the visible body follows smoothly.
+  const visualRoot = new THREE.Group();
+  visualRoot.name = 'CharacterVisuals';
+  visualRoot.add(model);
+  rig.add(visualRoot);
+  rig.userData.visualRoot = visualRoot;
+
   rig.position.set(0, 0, 0);
   rig.updateMatrixWorld(true);
   world.add(rig);
