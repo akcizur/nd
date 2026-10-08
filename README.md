@@ -24,7 +24,10 @@ The project is currently focused on one thing: making character movement and thi
 - gamepad input
 - responsive desktop and mobile layout
 - Quaternius Universal Base Character loading with shared Universal Animation Library locomotion clips
-- animation state machine driven by actual movement speed
+- physics-driven UAL1 locomotion blendspace (idle / walk / jog / sprint)
+- buffered jump + coyote-time jump handling
+- dedicated jump / fall / landing animation phases
+- animation timing derived from real capsule velocity
 - simple flat test ground
 - lightweight scene designed for movement testing
 - GitHub Pages deployment
@@ -127,9 +130,11 @@ The character pipeline supports:
 - Quaternius GLTF / GLB humanoid models
 - CC0 character assets
 - shared Universal Animation Library locomotion
-- idle / walk / run / sprint / jump / fall animation states
-- runtime animation retargeting by humanoid bone name
-- animation state transitions based on actual horizontal velocity
+- direct UAL1 clip binding to the Universal humanoid rig
+- continuous idle / walk / jog / sprint blending
+- jump / fall / landing phases driven by Rapier state
+- animation playback rate derived from actual horizontal speed
+- no runtime bone retargeting
 
 The controller is intentionally independent from the final character asset, so the model can be replaced without rewriting movement logic.
 
@@ -151,9 +156,9 @@ src/
 The important runtime separation is:
 
 ```text
-Input → PlayerController → Rapier CharacterController → Character
-                    ↘
-                     AnimationSystem
+Input → PlayerController → Rapier CharacterController → corrected velocity
+                    ↘                              ↘
+                 AnimationSystem ← velocity / grounded / landing
 
 Camera ← Input + Player
 
@@ -217,12 +222,10 @@ Deployment is handled by GitHub Actions after changes are pushed to `main`.
 - capsule/visual alignment tuning
 - physical obstacle collision validation
 - foot contact and landing polish
-- better locomotion blending
+- continuous locomotion blend tuning
 - Quaternius UAL clip coverage
-- foot-skate reduction
-
-
-- landing transitions
+- foot contact / foot-skate reduction
+- landing polish
 - crouch locomotion
 - improved touch controls
 
