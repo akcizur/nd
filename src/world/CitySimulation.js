@@ -50,8 +50,8 @@ export class CitySimulation {
     this.pedestrianCount = pedestrianCount;
     this.trafficGroup = new THREE.Group();
     this.pedestrianGroup = new THREE.Group();
-    this.trafficGroup.name = 'MavonTraffic';
-    this.pedestrianGroup.name = 'MavonPedestrians';
+    this.trafficGroup.name = 'NDTraffic';
+    this.pedestrianGroup.name = 'NDPedestrians';
     world.add(this.trafficGroup, this.pedestrianGroup);
   }
 
