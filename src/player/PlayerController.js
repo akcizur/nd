@@ -257,38 +257,36 @@ export class PlayerController {
 
     const horizontalMagnitude = this.horizontalSpeed;
 
-    if (magnitude > 0.05 && horizontalMagnitude > 0.08) {
-      const targetYaw = Math.atan2(
-        -this.horizontalVelocity.x,
-        -this.horizontalVelocity.z
-      );
+    // Third-person body orientation follows the camera yaw, while the visible
+    // character turns toward the actual travel direction. This is the useful
+    // separation used by the referenced third-person boilerplate.
+    const bodyYaw = this.camera?.yaw;
+    if (Number.isFinite(bodyYaw)) {
+      this.object.rotation.y = bodyYaw;
+    }
 
-      const delta = THREE.MathUtils.euclideanModulo(
-        targetYaw - this.object.rotation.y + Math.PI,
-        Math.PI * 2
-      ) - Math.PI;
+    const visualRoot = this.object.userData.visualRoot;
+    if (visualRoot) {
+      let targetLocalYaw = 0;
 
-      // Gameplay body keeps a responsive heading.
-      this.object.rotation.y += delta * (
-        1 - Math.exp(-this.rotationSharpness * dt)
-      );
+      if (magnitude > 0.05 && horizontalMagnitude > 0.08) {
+        const movementYaw = Math.atan2(
+          -this.horizontalVelocity.x,
+          -this.horizontalVelocity.z
+        );
 
-      // Visuals use a separate smooth heading so the mesh does not snap
-      // when the movement vector changes abruptly, following the same
-      // gameplay/visual separation used by the referenced boilerplate.
-      const visualRoot = this.object.userData.visualRoot;
-      if (visualRoot) {
-        const visualDelta = THREE.MathUtils.euclideanModulo(
-          -this.object.rotation.y + Math.PI,
+        targetLocalYaw = THREE.MathUtils.euclideanModulo(
+          movementYaw - this.object.rotation.y + Math.PI,
           Math.PI * 2
         ) - Math.PI;
-        visualRoot.rotation.y = THREE.MathUtils.damp(
-          visualRoot.rotation.y,
-          visualDelta,
-          this.visualRotationSharpness,
-          dt
-        );
       }
+
+      visualRoot.rotation.y = THREE.MathUtils.damp(
+        visualRoot.rotation.y,
+        targetLocalYaw,
+        this.visualRotationSharpness,
+        dt
+      );
     }
 
     this.state = !this.grounded
