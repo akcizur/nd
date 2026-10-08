@@ -6,7 +6,7 @@ The project now has an explicit asset pipeline separate from runtime game code.
 
 AssetManifest -> AssetPackRegistry -> loaders -> Three.js
 
-Runtime assets can be local paths under the Vite base URL or version-pinned remote URLs during migration.
+Runtime visual assets can be local paths under the Vite base URL. The current playable character is generated in code and has no runtime asset download dependency.
 
 ## Source / production folders
 
@@ -24,7 +24,7 @@ The optimizer uses glTF Transform with Meshopt geometry/animation compression an
 
 ## Recommended flow
 
-asset download -> assets-source -> inspect -> optimize -> assets -> AssetManifest
+optional asset download -> assets-source -> inspect -> optimize -> assets -> AssetManifest
 
 ## Rules
 
