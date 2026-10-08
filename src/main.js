@@ -220,10 +220,7 @@ async function loadPlayer() {
     createPlayerRig(gltf.scene, 1.8);
 
     // Quaternius UAL uses the same humanoid skeleton naming, so bind clips by bone name.
-    const clips = characterPack.retargetClips(
-      characterPack.createPlayerClips(animationLibrary),
-      playerVisual
-    );
+    const clips = characterPack.createPlayerClips(animationLibrary);
 
     if (clips.length) {
       playerAnimation = new AnimationSystem(playerVisual);
