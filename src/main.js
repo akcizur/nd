@@ -323,6 +323,7 @@ function updatePlayer(dt) {
     strafe: playerController.animationInput.strafe,
     forward: playerController.animationInput.forward,
     sprinting: Boolean(playerController.input.sprint),
+    crouched: Boolean(playerController.input.crouch),
     walkSpeed: playerController.walkSpeed,
     runSpeed: playerController.runSpeed,
     sprintSpeed: playerController.sprintSpeed,
