@@ -390,20 +390,19 @@ function updatePlayer() {
   if (!playerController || gameState.current !== GameState.PLAYING) return;
 
   const speed = playerController.horizontalSpeed;
-  const maxSpeed = playerController.input.sprint
-    ? playerController.sprintSpeed
-    : playerController.runSpeed;
 
   playerAnimation?.updateLocomotion({
     speed,
-    maxSpeed,
+    maxSpeed: playerController.sprintSpeed,
     grounded: playerController.grounded,
     verticalVelocity: playerController.velocityY,
-    forward: playerController.animationInput.forward,
     strafe: playerController.animationInput.strafe,
-    crouched: false,
     sprinting: Boolean(playerController.input.sprint),
-    dt: 1 / 60,
+    walkSpeed: playerController.walkSpeed,
+    runSpeed: playerController.runSpeed,
+    sprintSpeed: playerController.sprintSpeed,
+    justLanded: playerController.justLanded,
+    dt: Math.min(clock.getDelta(), 1 / 30),
   });
 
   hudSpeed.textContent = playerController.state.toUpperCase() + ' · ' +
