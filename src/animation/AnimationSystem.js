@@ -1,14 +1,20 @@
 import * as THREE from 'three';
 
+const LOOPING = ['idle', 'walk', 'run', 'sprint'];
+const AIR = ['jump', 'fall', 'land'];
+
 export class AnimationSystem {
   constructor(object) {
     this.object = object;
     this.mixer = null;
     this.actions = {};
-    this.state = null;
+    this.state = 'idle';
     this.previousState = null;
-    this.upperBody = null;
+
     this.landedPulse = 0;
+    this.airPhase = null;
+    this.landingActive = false;
+
     this.locomotion = {
       enabled: false,
       current: 'idle',
@@ -18,6 +24,7 @@ export class AnimationSystem {
       grounded: true,
       direction: 0,
       blend: 0,
+      weights: { idle: 1, walk: 0, run: 0, sprint: 0 },
     };
   }
 
@@ -25,42 +32,9 @@ export class AnimationSystem {
     return String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
-  _aliasDirectional(key, action) {
-    const rules = [
-      ['forwardLeft', /^(?:forwardleft|leftforward|forwardstrafeleft|strafeleftforward)$/],
-      ['forwardRight', /^(?:forwardright|rightforward|forwardstraferight|straferightforward)$/],
-      ['backwardLeft', /^(?:backwardleft|leftbackward|backwardstrafeleft|strafeleftbackward)$/],
-      ['backwardRight', /^(?:backwardright|rightbackward|backwardstraferight|straferightbackward)$/],
-      ['forward', /^(?:forward|forwards)$/],
-      ['backward', /^(?:backward|backwards|back)$/],
-      ['left', /^(?:left|strafeleft)$/],
-      ['right', /^(?:right|straferight)$/],
-    ];
-
-    for (const [alias, pattern] of rules) {
-      if (pattern.test(key) && !this.actions[alias]) this.actions[alias] = action;
-    }
-  }
-
   _registerClip(clip) {
-    const key = this._key(clip.name);
-    const action = this.mixer.clipAction(clip);
-    this.actions[key] = action;
-    this._aliasDirectional(key, action);
-
-    const aliases = [];
-    if (/idle|stand|breath/.test(key)) aliases.push('idle');
-    if (/walk|walking|locomotion/.test(key) && !/back|strafe/.test(key)) aliases.push('walk');
-    if (/run|running|jog/.test(key) && !/back|strafe/.test(key)) aliases.push('run');
-    if (/sprint/.test(key)) aliases.push('sprint');
-    if (/jumpstart|takeoff|jump/.test(key)) aliases.push('jump');
-    if (/jumploop|fall|airborne/.test(key)) aliases.push('fall');
-    if (/land|landing/.test(key)) aliases.push('land');
-    if (/crouch|crouching/.test(key)) aliases.push('crouch');
-
-    for (const alias of aliases) {
-      if (!this.actions[alias]) this.actions[alias] = action;
-    }
+    if (!clip?.name || !this.mixer) return;
+    this.actions[this._key(clip.name)] = this.mixer.clipAction(clip);
   }
 
   bind(mixer, clips = []) {
@@ -69,232 +43,319 @@ export class AnimationSystem {
 
     for (const clip of clips) this._registerClip(clip);
 
-    // Quaternius UAL1 has deterministic locomotion clip names. Prefer these
-    // exact names instead of broad pattern matching for the player.
+    // UAL1 is authored for the Universal skeleton. Bind the canonical clips
+    // directly: no runtime retargeting, no fuzzy locomotion selection.
     const exact = name => this.actions[this._key(name)] || null;
-    this.actions.idle = exact('Idle_Loop') || this.actions.idle || null;
-    this.actions.walk = exact('Walk_Loop') || this.actions.walk || null;
-    this.actions.run = exact('Jog_Fwd_Loop') || this.actions.run || this.actions.walk || null;
-    this.actions.sprint = exact('Sprint_Loop') || this.actions.sprint || this.actions.run || null;
-    this.actions.jump = exact('Jump_Start') || this.actions.jump || null;
-    this.actions.fall = exact('Jump_Loop') || this.actions.fall || this.actions.jump || null;
-    this.actions.land = exact('Jump_Land') || this.actions.land || null;
 
-    this._configureLooping();
-    this.state = null;
+    this.actions.idle = exact('Idle_Loop');
+    this.actions.walk = exact('Walk_Loop');
+    this.actions.run = exact('Jog_Fwd_Loop');
+    this.actions.sprint = exact('Sprint_Loop');
+    this.actions.jump = exact('Jump_Start');
+    this.actions.fall = exact('Jump_Loop');
+    this.actions.land = exact('Jump_Land');
 
-    if (this.actions.idle) this._transition('idle', 0);
+    this._configureActions();
+
+    if (this.actions.idle) {
+      this.actions.idle.enabled = true;
+      this.actions.idle.setEffectiveWeight(1);
+      this.actions.idle.play();
+    }
+
     this.locomotion.enabled = Boolean(this.actions.idle);
+    console.info('[ANIM] UAL1 direct binding', {
+      idle: Boolean(this.actions.idle),
+      walk: Boolean(this.actions.walk),
+      jog: Boolean(this.actions.run),
+      sprint: Boolean(this.actions.sprint),
+      jump: Boolean(this.actions.jump),
+      fall: Boolean(this.actions.fall),
+      land: Boolean(this.actions.land),
+    });
   }
 
   addClips(clips = []) {
     if (!this.mixer) return;
     for (const clip of clips) this._registerClip(clip);
-    if (!this.actions.walk) this.actions.walk = this.actions.run || null;
-    if (!this.actions.run) this.actions.run = this.actions.walk || null;
-    if (!this.actions.sprint) this.actions.sprint = this.actions.run || null;
-    this._configureLooping();
+    this._configureActions();
   }
 
-  _configureLooping() {
+  _configureActions() {
     const unique = new Set(Object.values(this.actions).filter(Boolean));
 
     for (const action of unique) {
       action.enabled = false;
-      action.setLoop(THREE.LoopRepeat, Infinity);
-      action.clampWhenFinished = false;
       action.setEffectiveWeight(0);
       action.setEffectiveTimeScale(1);
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
     }
 
-    for (const key of ['jump', 'land']) {
-      if (!this.actions[key]) continue;
-      this.actions[key].setLoop(THREE.LoopOnce, 1);
-      this.actions[key].clampWhenFinished = true;
+    for (const key of ['jump', 'fall', 'land']) {
+      const action = this.actions[key];
+      if (!action) continue;
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
     }
   }
 
-  _resolve(name) {
-    const key = this._key(name);
-    if (this.actions[key]) return key;
+  _playLoop(key) {
+    const action = this.actions[key];
+    if (!action) return null;
 
-    const aliases = {
-      idle: ['stand', 'breath'],
-      walk: ['run', 'idle'],
-      run: ['walk', 'sprint', 'idle'],
-      sprint: ['run', 'walk', 'idle'],
-      crouch: ['walk', 'idle'],
-      jump: ['fall', 'run', 'walk', 'idle'],
-      fall: ['jump', 'run', 'walk', 'idle'],
-      land: ['idle', 'walk', 'run'],
+    action.enabled = true;
+    if (!action.isRunning()) action.play();
+    return action;
+  }
+
+  _fadeAction(action, target, sharpness, dt) {
+    if (!action) return;
+    const weight = THREE.MathUtils.damp(action.getEffectiveWeight(), target, sharpness, dt);
+    action.enabled = weight > 0.001 || target > 0;
+    action.setEffectiveWeight(weight);
+  }
+
+  _setLocomotionWeights(weights, dt) {
+    for (const key of LOOPING) {
+      const action = this.actions[key];
+      if (!action) continue;
+
+      const target = weights[key] ?? 0;
+      this._playLoop(key);
+      this._fadeAction(action, target, target > 0 ? 12 : 18, dt);
+
+      if (key !== 'idle' && action.getEffectiveWeight() < 0.001) {
+        action.enabled = false;
+      }
+    }
+  }
+
+  _blendSpeed(speed, walkSpeed, runSpeed, sprintSpeed) {
+    const walk = Math.max(0.01, walkSpeed);
+    const run = Math.max(walk + 0.01, runSpeed);
+    const sprint = Math.max(run + 0.01, sprintSpeed);
+
+    if (speed <= 0.12) {
+      return { idle: 1, walk: 0, run: 0, sprint: 0, state: 'idle' };
+    }
+
+    // Continuous 4-point locomotion blend:
+    // idle → walk → jog → sprint.
+    if (speed < walk) {
+      const t = THREE.MathUtils.smoothstep(speed, 0.12, walk);
+      return {
+        idle: 1 - t,
+        walk: t,
+        run: 0,
+        sprint: 0,
+        state: 'walk',
+      };
+    }
+
+    if (speed < run) {
+      const t = THREE.MathUtils.smoothstep(speed, walk, run);
+      return {
+        idle: 0,
+        walk: 1 - t,
+        run: t,
+        sprint: 0,
+        state: 'run',
+      };
+    }
+
+    const t = THREE.MathUtils.smoothstep(speed, run, sprint);
+    return {
+      idle: 0,
+      walk: 0,
+      run: 1 - t,
+      sprint: t,
+      state: 'sprint',
     };
-
-    return (aliases[key] || []).find(alias => this.actions[alias]) || null;
   }
 
-  _uniqueActions() {
-    return [...new Set(Object.values(this.actions).filter(Boolean))];
+  _startAirPhase(phase) {
+    const key = this.actions[phase] ? phase : phase === 'jump' ? 'fall' : 'jump';
+    const action = this.actions[key];
+    if (!action) return;
+
+    for (const locomotion of LOOPING) {
+      if (this.actions[locomotion]) this.actions[locomotion].setEffectiveWeight(0);
+    }
+
+    action.enabled = true;
+    action.reset();
+    action.setEffectiveWeight(1);
+    action.play();
+
+    this.airPhase = key;
+    this.state = key;
   }
 
-  _transition(name, fade = 0.14, { restart = true } = {}) {
-    const resolved = this._resolve(name);
-    if (!resolved) return false;
+  _updateAirborne({ grounded, verticalVelocity, dt }) {
+    if (grounded) return false;
 
-    const next = this.actions[resolved];
-    const current = this.actions[this.state];
-
-    if (current === next && this.state === resolved) {
-      next.enabled = true;
+    if (this.airPhase === null) {
+      this._startAirPhase(verticalVelocity > 0 ? 'jump' : 'fall');
       return true;
     }
 
-    this.previousState = this.state;
-    this.state = resolved;
+    if (
+      this.airPhase === 'jump' &&
+      verticalVelocity <= 0.05 &&
+      this.actions.fall
+    ) {
+      const old = this.actions.jump;
+      const next = this.actions.fall;
 
-    if (current && current !== next) {
-      current.fadeOut(fade);
+      if (old && old !== next) {
+        old.enabled = false;
+        old.setEffectiveWeight(0);
+      }
+
+      next.enabled = true;
+      next.setEffectiveWeight(1);
+      if (!next.isRunning()) {
+        next.reset().play();
+      }
+
+      this.airPhase = 'fall';
+      this.state = 'fall';
     }
 
-    next.enabled = true;
-    next.setEffectiveWeight(0);
-    if (restart) next.reset();
-    next.fadeIn(fade).play();
-
     return true;
   }
 
-  _playOneShot(name) {
-    const resolved = this._resolve(name);
-    if (!resolved) return false;
+  _startLanding() {
+    const action = this.actions.land;
+    this.landingActive = Boolean(action);
 
-    const action = this.actions[resolved];
+    if (!action) return;
+
     action.enabled = true;
     action.reset();
-    action.setLoop(THREE.LoopOnce, 1);
-    action.clampWhenFinished = true;
     action.setEffectiveWeight(1);
     action.play();
-    this.state = resolved;
-    return true;
-  }
 
-  _selectDirectional() {
-    return null;
+    this.state = 'land';
   }
 
   updateLocomotion({
     speed = 0,
-    maxSpeed = 8.4,
+    maxSpeed = 7,
     grounded = true,
     verticalVelocity = 0,
     dt = 1 / 60,
-    forward = 1,
+    walkSpeed = 2.6,
+    runSpeed = 4.8,
+    sprintSpeed = 7.0,
     strafe = 0,
-    crouched = false,
+    justLanded = false,
     sprinting = false,
   } = {}) {
     if (!this.mixer || !this.actions.idle) return;
 
     const safeMax = Math.max(0.01, maxSpeed);
-    const normalized = THREE.MathUtils.clamp(speed / safeMax, 0, 1);
-    const smoothing = 1 - Math.exp(-14 * dt);
 
-    let target = 'idle';
-
-    // Highest priority: airborne state. A jump clip is committed once;
-    // after its authored takeoff it hands off to fall without restarting.
     if (!grounded) {
-      if (verticalVelocity > 0.15 && this.actions.jump) {
-        target = 'jump';
-      } else if (this.actions.fall) {
-        target = 'fall';
+      this.landingActive = false;
+      this._updateAirborne({ grounded, verticalVelocity, dt });
+
+      this.locomotion.speed = speed;
+      this.locomotion.maxSpeed = safeMax;
+      this.locomotion.normalizedSpeed = THREE.MathUtils.clamp(speed / safeMax, 0, 1);
+      this.locomotion.grounded = false;
+      this.locomotion.direction = Math.atan2(strafe, 1);
+      return;
+    }
+
+    // Grounded again: leave air state and optionally play a dedicated landing clip.
+    if (this.locomotion.grounded === false) {
+      if (justLanded) this._startLanding();
+      this.airPhase = null;
+      this.landedPulse = 0.1;
+    }
+
+    if (this.landingActive) {
+      const land = this.actions.land;
+
+      for (const key of LOOPING) {
+        this._fadeAction(this.actions[key], 0, 20, dt);
+      }
+
+      if (land && !land.isRunning()) {
+        this.landingActive = false;
+        land.enabled = false;
+        land.setEffectiveWeight(0);
+        this.state = 'idle';
       } else {
-        target = 'jump';
+        this.locomotion.grounded = true;
+        this.locomotion.speed = speed;
+        this.locomotion.maxSpeed = safeMax;
+        return;
       }
-    } else if (this.locomotion.grounded === false && this.actions.land) {
-      // A short landing state gives the feet a deterministic recovery pose.
-      target = 'land';
-    } else if (crouched) {
-      target = this.actions.crouch ? 'crouch' : 'walk';
-    } else if (speed < 0.12) {
-      target = 'idle';
-    } else if (sprinting || normalized >= 0.78) {
-      target = this.actions.sprint ? 'sprint' : 'run';
-    } else if (normalized >= 0.52) {
-      target = this.actions.run ? 'run' : 'walk';
-    } else {
-      target = 'walk';
     }
 
-    // Player locomotion stays on the canonical in-place clips:
-    // Idle_Loop → Walk_Loop → Jog_Fwd_Loop → Sprint_Loop.
-    // The full UAL library contains crouch/sit/kneel/action clips which must
-    // never be selected implicitly by the locomotion state machine.
-    const canonical = this._resolve(target);
-    const desired = canonical ? this.actions[canonical] : null;
+    const blend = this._blendSpeed(speed, walkSpeed, runSpeed, sprintSpeed);
 
-    if (desired) {
-      const current = this.actions[this.state];
+    // Sprint input is a gameplay modifier, not a hard animation switch.
+    // If sprint is released while velocity is still high, the blend naturally
+    // decays through jog instead of snapping.
+    if (!sprinting && blend.sprint > 0) {
+      const runShare = blend.sprint;
+      blend.run += runShare;
+      blend.sprint = 0;
+      const total = blend.run + blend.walk + blend.idle;
+      blend.run /= Math.max(total, 0.001);
+      blend.walk /= Math.max(total, 0.001);
+      blend.idle /= Math.max(total, 0.001);
+    }
 
-      if (current !== desired) {
-        if (current) current.fadeOut(Math.min(0.16, Math.max(0.06, dt * 5)));
-        desired.enabled = true;
-        desired.setEffectiveWeight(0);
-        desired.reset();
-        desired.fadeIn(Math.min(0.16, Math.max(0.06, dt * 5))).play();
+    this._setLocomotionWeights(blend, dt);
 
-        const entry = Object.entries(this.actions).find(([, action]) => action === desired);
-        this.previousState = this.state;
-        this.state = entry?.[0] || canonical || target;
-      } else if (!desired.isRunning() && !['jump', 'fall', 'land'].includes(this.state)) {
-        desired.play();
-      }
+    const gaitSpeed =
+      blend.sprint > 0.45 ? sprintSpeed :
+      blend.run > blend.walk ? runSpeed :
+      walkSpeed;
 
-      desired.enabled = true;
-      desired.setEffectiveWeight(
-        THREE.MathUtils.damp(desired.getEffectiveWeight(), 1, 14, dt)
+    const primary =
+      blend.sprint > blend.run ? this.actions.sprint :
+      blend.run > blend.walk ? this.actions.run :
+      this.actions.walk;
+
+    if (primary && (blend.walk + blend.run + blend.sprint) > 0.01) {
+      const targetRate = THREE.MathUtils.clamp(
+        speed / Math.max(gaitSpeed, 0.01),
+        0.72,
+        1.55
+      );
+      primary.setEffectiveTimeScale(
+        THREE.MathUtils.damp(primary.getEffectiveTimeScale(), targetRate, 9, dt)
       );
     }
 
-    const selected = desired;
-    for (const action of this._uniqueActions()) {
-      if (action === selected) continue;
-      action.setEffectiveWeight(
-        THREE.MathUtils.damp(action.getEffectiveWeight(), 0, 16, dt)
-      );
-      if (action.getEffectiveWeight() < 0.001) action.enabled = false;
-    }
-
-    if (selected) {
-      const gait = this.state === 'sprint' ? 8.4 :
-        this.state === 'run' ? 6.2 :
-        this.state === 'walk' ? 3.8 : 4.0;
-      selected.timeScale = ['walk', 'run', 'sprint'].includes(this.state)
-        ? THREE.MathUtils.clamp(speed / gait, 0.72, 1.8)
-        : 1;
-    }
-
-    // A one-shot jump must never be restarted every frame. Once it has
-    // finished, the state machine can move to fall/land on the next update.
-    if (this.state === 'jump' && selected && !selected.isRunning() && grounded === false) {
-      this.state = this.actions.fall ? 'fall' : this.state;
-    }
-
-    if (this.state === 'land' && selected && !selected.isRunning()) {
-      this.state = null;
-    }
-
+    this.previousState = this.state;
+    this.state = blend.state;
+    this.locomotion.current = blend.state;
     this.locomotion.speed = speed;
     this.locomotion.maxSpeed = safeMax;
-    this.locomotion.normalizedSpeed = normalized;
-    this.locomotion.grounded = grounded;
-    this.locomotion.direction = Math.atan2(strafe, forward);
-    this.locomotion.blend += (normalized - this.locomotion.blend) * smoothing;
-    this.locomotion.current = target;
-  }
+    this.locomotion.normalizedSpeed = THREE.MathUtils.clamp(speed / safeMax, 0, 1);
+    this.locomotion.grounded = true;
+    this.locomotion.direction = Math.atan2(strafe, 1);
+    this.locomotion.blend = THREE.MathUtils.damp(
+      this.locomotion.blend,
+      this.locomotion.normalizedSpeed,
+      10,
+      dt
+    );
+    this.locomotion.weights = {
+      idle: blend.idle,
+      walk: blend.walk,
+      run: blend.run,
+      sprint: blend.sprint,
+    };
 
-  setUpperBody(action) {
-    this.upperBody = action || null;
+    this.landedPulse = Math.max(0, this.landedPulse - dt);
   }
 
   update(dt) {
