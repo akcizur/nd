@@ -46,6 +46,7 @@ export class AnimationSystem {
     // UAL1 is authored for the Universal skeleton. CharacterPackLoader
     // already sanitized/rebound the tracks to this player's bones, so here we
     // only select the canonical in-place locomotion clips.
+    const exact = name => this.actions[this._key(name)] || null;
 
     this.actions.idle = exact('Idle_Loop');
     this.actions.walk = exact('Walk_Loop');
