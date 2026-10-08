@@ -1,22 +1,6 @@
 {
-  "name": "nd",
-  "private": true,
-  "version": "0.3.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "assets:inspect": "node tools/inspect-assets.mjs",
-    "assets:optimize": "node tools/optimize-assets.mjs"
-  },
-  "dependencies": {
-    "three": "^0.184.0",
-    "@dimforge/rapier3d-compat": "0.18.2",
-    "three-mesh-bvh": "^0.9.15"
-  },
-  "devDependencies": {
-    "vite": "^6.3.5",
-    "@gltf-transform/cli": "^4.5.1"
-  }
+  "name":"nd-third-person-web","private":true,"version":"1.0.0","type":"module",
+  "scripts":{"dev":"vite --host 0.0.0.0","start":"vite --host 0.0.0.0","build":"vite build","preview":"vite preview --host 0.0.0.0","check":"tsc --noEmit"},
+  "dependencies":{"@dimforge/rapier3d-compat":"0.21.0","phaser":"4.2.1","three":"0.186.1"},
+  "devDependencies":{"@types/three":"0.186.0","typescript":"5.8.3","vite":"8.3.3"}
 }

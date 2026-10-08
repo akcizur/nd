@@ -1,0 +1,4 @@
+{
+  "compilerOptions":{"target":"ES2022","useDefineForClassFields":true,"module":"ESNext","moduleResolution":"Bundler","verbatimModuleSyntax":true,"strict":true,"skipLibCheck":true,"noEmit":true,"lib":["ES2022","DOM","DOM.Iterable"],"types":["Phaser"]},
+  "include":["src/**/*.ts","vite.config.ts"]
+}

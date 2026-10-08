@@ -1,0 +1,12 @@
+import * as THREE from 'three';
+import type {PhysicsWorldHandle} from '../physics/PhysicsWorld';
+import {addStaticBox} from '../physics/PhysicsWorld';
+export class TestWorld{
+ readonly group=new THREE.Group();
+ constructor(private readonly physics:PhysicsWorldHandle){this.group.name='World';this.lights();this.ground();this.arena();this.ramp();this.grid();}
+ private lights(){this.group.add(new THREE.HemisphereLight(0xdfe8ff,0x1a1c22,2));const sun=new THREE.DirectionalLight(0xffffff,2.4);sun.position.set(10,18,6);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;sun.shadow.camera.left=-20;sun.shadow.camera.right=20;this.group.add(sun);}
+ private ground(){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(64,64),new THREE.MeshStandardMaterial({color:0x3d4650,roughness:.94}));mesh.rotation.x=-Math.PI/2;mesh.receiveShadow=true;this.group.add(mesh);addStaticBox(this.physics,0,-.1,0,32,.1,32);}
+ private arena(){const material=new THREE.MeshStandardMaterial({color:0x6d7480,roughness:.8});const blocks=[[ -8,1.2,-5,3,1.2,2],[8,1.1,-3,2.5,1.1,2.5],[-7,.7,7,2,.7,2],[7,.95,6.5,3,.95,1.6],[0,.5,-10,3.2,.5,1.5]] as const;for(const [x,y,z,hx,hy,hz] of blocks){const mesh=new THREE.Mesh(new THREE.BoxGeometry(hx*2,hy*2,hz*2),material);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;this.group.add(mesh);addStaticBox(this.physics,x,y,z,hx,hy,hz);}const pillarMat=new THREE.MeshStandardMaterial({color:0x828b98,roughness:.78});for(let i=0;i<8;i++){const a=i/8*Math.PI*2,x=Math.cos(a)*12,z=Math.sin(a)*12,p=new THREE.Mesh(new THREE.CylinderGeometry(.55,.7,3.2,14),pillarMat);p.position.set(x,1.6,z);p.castShadow=true;p.receiveShadow=true;this.group.add(p);addStaticBox(this.physics,x,1.6,z,.7,1.6,.7);}}
+ private ramp(){const m=new THREE.Mesh(new THREE.BoxGeometry(4.8,.3,8),new THREE.MeshStandardMaterial({color:0x59616e,roughness:.9}));m.position.set(0,.7,6);m.rotation.x=-.32;m.castShadow=true;m.receiveShadow=true;this.group.add(m);addStaticBox(this.physics,0,.72,6,2.4,.18,4);}
+ private grid(){const g=new THREE.GridHelper(64,32,0x8b94a1,0x59616e);g.material.transparent=true;g.material.opacity=.22;this.group.add(g);}
+}
