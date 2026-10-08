@@ -69,17 +69,16 @@ export class AnimationSystem {
 
     for (const clip of clips) this._registerClip(clip);
 
-    if (!this.actions.idle) {
-      this.actions.idle = this.actions.stand ||
-        this.actions.breath ||
-        Object.values(this.actions)[0] ||
-        null;
-    }
-
-    if (!this.actions.walk) this.actions.walk = this.actions.run || null;
-    if (!this.actions.run) this.actions.run = this.actions.walk || null;
-    if (!this.actions.sprint) this.actions.sprint = this.actions.run || null;
-    if (!this.actions.fall) this.actions.fall = this.actions.jump || null;
+    // Quaternius UAL1 has deterministic locomotion clip names. Prefer these
+    // exact names instead of broad pattern matching for the player.
+    const exact = name => this.actions[this._key(name)] || null;
+    this.actions.idle = exact('Idle_Loop') || this.actions.idle || null;
+    this.actions.walk = exact('Walk_Loop') || this.actions.walk || null;
+    this.actions.run = exact('Jog_Fwd_Loop') || this.actions.run || this.actions.walk || null;
+    this.actions.sprint = exact('Sprint_Loop') || this.actions.sprint || this.actions.run || null;
+    this.actions.jump = exact('Jump_Start') || this.actions.jump || null;
+    this.actions.fall = exact('Jump_Loop') || this.actions.fall || this.actions.jump || null;
+    this.actions.land = exact('Jump_Land') || this.actions.land || null;
 
     this._configureLooping();
     this.state = null;
@@ -179,42 +178,8 @@ export class AnimationSystem {
     return true;
   }
 
-  _selectDirectional(forward, strafe) {
-    const directional = {
-      forwardLeft: this.actions.forwardLeft,
-      forwardRight: this.actions.forwardRight,
-      backwardLeft: this.actions.backwardLeft,
-      backwardRight: this.actions.backwardRight,
-      forward: this.actions.forward,
-      backward: this.actions.backward,
-      left: this.actions.left,
-      right: this.actions.right,
-    };
-
-    const hasAny = Object.values(directional).some(Boolean);
-    if (!hasAny) return null;
-
-    const angle = Math.atan2(strafe, forward);
-    const octant = Math.round(angle / (Math.PI / 4));
-    const index = (octant + 8) % 8;
-    const names = [
-      'forward', 'forwardRight', 'right', 'backwardRight',
-      'backward', 'backwardLeft', 'left', 'forwardLeft',
-    ];
-
-    const preferred = names[index];
-    const fallback = {
-      forwardRight: ['forward'],
-      backwardRight: ['backward', 'forward'],
-      backwardLeft: ['backward', 'forward'],
-      forwardLeft: ['forward'],
-      right: ['forward'],
-      left: ['forward'],
-    };
-
-    return directional[preferred] ||
-      (fallback[preferred] || []).map(key => directional[key]).find(Boolean) ||
-      null;
+  _selectDirectional() {
+    return null;
   }
 
   updateLocomotion({
@@ -261,16 +226,12 @@ export class AnimationSystem {
       target = 'walk';
     }
 
-    // Directional clips are used only for grounded locomotion and only when
-    // they are explicitly present in the loaded animation pack.
-    const directional = grounded && speed > 0.12
-      ? this._selectDirectional(forward, strafe)
-      : null;
-
+    // Player locomotion stays on the canonical in-place clips:
+    // Idle_Loop → Walk_Loop → Jog_Fwd_Loop → Sprint_Loop.
+    // The full UAL library contains crouch/sit/kneel/action clips which must
+    // never be selected implicitly by the locomotion state machine.
     const canonical = this._resolve(target);
-    const desired = directional && !['idle', 'land', 'crouch'].includes(target)
-      ? directional
-      : (canonical ? this.actions[canonical] : null);
+    const desired = canonical ? this.actions[canonical] : null;
 
     if (desired) {
       const current = this.actions[this.state];
