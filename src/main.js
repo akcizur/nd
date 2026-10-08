@@ -94,8 +94,11 @@ function createPlayerRig(model, targetHeight = 1.8) {
   const bounds = new THREE.Box3().setFromObject(model);
   model.position.y = -bounds.min.y + 0.01;
 
-  // Quaternius glTF uses the standard humanoid facing axis; the rig itself rotates.
-  model.rotation.y = 0;
+  // Quaternius Universal Base mesh faces +Z in its source orientation.
+  // The controller/world use -Z as character forward, so keep the visual
+  // model on a fixed 180° yaw offset while the gameplay rig remains canonical.
+  model.rotation.y = Math.PI;
+  model.userData.forwardYawOffset = Math.PI;
 
   model.traverse(node => {
     if (!node.isMesh) return;
