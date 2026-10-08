@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export class VehicleController {
-  constructor({ object, wheels = [], input, physics = null }) {
+  constructor({ object, wheels = [], input, physics }) {
     this.object = object;
     this.wheels = wheels;
     this.input = input;
@@ -9,101 +9,103 @@ export class VehicleController {
     this.physicsBody = null;
     this.dynamics = null;
     this.speed = 0;
-    this.maxForward = 13;
-    this.maxReverse = 6;
     this.steeringAngle = 0;
-    this.steerRate = 7;
-    this.bodyRoll = 0;
-    this.bodyPitch = 0;
-    this.yaw = object.rotation.y;
   }
 
   bindPhysics(body) {
     this.physicsBody = body;
-    this.dynamics = this.physics?.createVehicleDynamics(body, {
-      maxForward: this.maxForward,
-      maxReverse: this.maxReverse,
-      wheels: this.wheels.map(wheel => {
-        const p = wheel.position;
-        return { object: wheel, local: { x: p.x, y: p.y - 0.35, z: p.z } };
-      }),
+    this.dynamics = this.physics.createVehicleDynamics(body, {
+      maxForward: 14,
+      maxReverse: 6,
+      engineForce: 10500,
+      brakeForce: 14500,
+      handbrakeForce: 8500,
+      lateralGrip: 9.2,
+      wheels: this.wheels.map(wheel => ({
+        object: wheel,
+        local: { x: wheel.position.x, y: wheel.position.y - 0.35, z: wheel.position.z },
+      })),
     });
-    this.physics?.syncObject(this.object, body);
+    this.physics.syncObject(this.object, body);
   }
 
   update(dt) {
-    if (!this.physicsBody || !this.physics || !this.dynamics) return;
+    if (!this.physicsBody || !this.dynamics) return;
 
-    const requested = THREE.MathUtils.clamp(this.input.move.y, -1, 1);
+    const throttle = THREE.MathUtils.clamp(this.input.move.y, -1, 1);
     const steer = THREE.MathUtils.clamp(this.input.move.x, -1, 1);
-
-    // S/ArrowDown is a real reverse input. When changing direction while the
-    // car is moving, brake first; once nearly stopped the same input becomes
-    // reverse throttle.
-    const velocity = this.physicsBody.linvel();
+    const velocity = this.physicsBody.body.linvel();
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.object.quaternion);
     const signedSpeed = velocity.x * forward.x + velocity.z * forward.z;
-    const changingDirection = Math.abs(signedSpeed) > 0.65 &&
-      requested !== 0 &&
-      Math.sign(requested) !== Math.sign(signedSpeed);
-    const throttle = changingDirection ? 0 : requested;
-    const brake = changingDirection ? Math.abs(requested) : 0;
+
+    const braking = Math.abs(signedSpeed) > 0.6 && throttle * signedSpeed < -0.15;
 
     this.physics.setVehicleInput(this.physicsBody, {
-      throttle,
-      brake,
+      throttle: braking ? 0 : throttle,
+      brake: braking ? Math.abs(throttle) : 0,
       steer,
-      handbrake: this.input.handbrake,
+      handbrake: Boolean(this.input.handbrake),
     });
-
-    this.speed = signedSpeed;
 
     this.steeringAngle = THREE.MathUtils.damp(
       this.steeringAngle,
       steer * this.dynamics.steeringMax,
-      this.steerRate,
+      9,
       dt
     );
+    this.speed = Math.abs(signedSpeed) < 0.03 ? 0 : signedSpeed;
 
-    const speedFactor = Math.min(1, Math.abs(this.speed) / this.maxForward);
-    this.bodyRoll = THREE.MathUtils.damp(
-      this.bodyRoll,
-      -this.steeringAngle * speedFactor * 0.08,
-      8,
-      dt
-    );
-    this.bodyPitch = THREE.MathUtils.damp(
-      this.bodyPitch,
-      -throttle * 0.04 + brake * 0.05,
-      8,
-      dt
-    );
+    const vehicleState = this.object.userData.vehicle;
+    if (vehicleState?.brakeLights) {
+      const intensity = braking || this.input.handbrake ? 1.2 : 0;
+      for (const lamp of vehicleState.brakeLights) lamp.material.emissiveIntensity = intensity;
+    }
+
+    if (vehicleState?.wheels) {
+      for (let i = 0; i < vehicleState.wheels.length; i++) {
+        const wheel = vehicleState.wheels[i];
+        const suspension = this.dynamics.suspension[i];
+        if (suspension) wheel.position.y = wheel.userData.baseY - suspension.compression * 0.20;
+        wheel.rotation.y = i < 2 ? -this.steeringAngle : 0;
+        wheel.rotation.x -= this.speed * dt / 0.32;
+      }
+    }
   }
 
   syncFromPhysics() {
     if (!this.physicsBody) return;
-    const velocity = this.physicsBody.linvel();
+
+    this.physics.syncObject(this.object, this.physicsBody);
+    const velocity = this.physicsBody.body.linvel();
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.object.quaternion);
-    const signedSpeed = velocity.x * forward.x + velocity.z * forward.z;
-    this.speed = Math.abs(signedSpeed) < 0.03 ? 0 : signedSpeed;
-    this.physics?.syncObject(this.object, this.physicsBody);
-    this.yaw = this.object.rotation.y;
+    this.speed = velocity.x * forward.x + velocity.z * forward.z;
+  }
 
-    for (let i = 0; i < this.wheels.length; i++) {
-      const wheel = this.wheels[i];
-      const state = this.dynamics?.suspension[i];
-      if (!state) continue;
-      wheel.userData.suspension = state.compression;
-      // Wheel mesh forward is local -Z, so mirror the physics steering angle
-      // for the visible wheel orientation.
-      wheel.userData.steer = (i < 2 ? -this.steeringAngle : 0);
-      wheel.userData.lastSpin = (wheel.userData.lastSpin ?? wheel.rotation.x)
-        - this.speed * (1 / 60) / 0.34;
+  getExitPosition() {
+    const side = new THREE.Vector3(1.55, 0, 0).applyQuaternion(this.object.quaternion);
+    return this.object.position.clone().add(side);
+  }
 
-      wheel.rotation.x = wheel.userData.lastSpin;
-      wheel.rotation.y = wheel.userData.steer;
-      wheel.position.y = wheel.userData.baseY ?? (wheel.userData.baseY = wheel.position.y);
-      wheel.position.y -= state.compression * 0.22;
-    }
+  reset(position, yaw = 0) {
+    const body = this.physicsBody?.body;
+    if (!body) return;
+
+    const half = yaw * 0.5;
+    body.setTranslation({
+      x: position.x,
+      y: position.y + (this.physicsBody.bodyOffsetY ?? 0.65),
+      z: position.z,
+    }, true);
+    body.setRotation({
+      x: 0, y: Math.sin(half), z: 0, w: Math.cos(half)
+    }, true);
+    body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.physics.syncObject(this.object, this.physicsBody);
+    this.speed = 0;
+  }
+
+  isNearby(position, distance = 4.5) {
+    return this.object.position.distanceTo(position) < distance;
   }
 }
