@@ -10,7 +10,11 @@ The project is currently focused on one thing: making character movement and thi
 - camera-relative character movement
 - smooth character rotation toward movement direction
 - walk / run / sprint movement bands
-- acceleration and deceleration
+- fixed-step Rapier character physics
+- capsule collision with walls and ground
+- physical gravity and jump velocity
+- acceleration / braking with limited air control
+- slope handling, ground snapping and autostep
 - jump / fall / grounded state
 - third-person orbit / follow camera
 - camera pitch limits
@@ -147,11 +151,14 @@ src/
 The important runtime separation is:
 
 ```text
-Input → PlayerController → Character
+Input → PlayerController → Rapier CharacterController → Character
                     ↘
                      AnimationSystem
 
 Camera ← Input + Player
+
+Physics:
+Fixed timestep → capsule collision → corrected movement → visual sync
 ```
 
 ## Development
@@ -207,9 +214,14 @@ Deployment is handled by GitHub Actions after changes are pushed to `main`.
 
 ### P1 — Character quality
 
+- capsule/visual alignment tuning
+- physical obstacle collision validation
+- foot contact and landing polish
 - better locomotion blending
 - Quaternius UAL clip coverage
 - foot-skate reduction
+
+
 - landing transitions
 - crouch locomotion
 - improved touch controls
