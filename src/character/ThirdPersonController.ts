@@ -11,10 +11,10 @@ export class ThirdPersonController{
  private desired=new THREE.Vector3();private forward=new THREE.Vector3();private right=new THREE.Vector3();private relative=new THREE.Vector3();
  constructor(private readonly physics:PhysicsWorldHandle,private readonly input:Input,private readonly camera:ThirdPersonCamera,private readonly stateStore:GameState){
   this.humanoid=createHumanoid();this.object.name='Player';this.object.add(this.humanoid.root);this.humanoid.root.position.y=-1.08;this.object.position.copy(this.spawn);
-  const desc=RAPIER.ColliderDesc.capsule(.78,.34).setTranslation({x:this.spawn.x,y:this.spawn.y,z:this.spawn.z});
+  const desc=RAPIER.ColliderDesc.capsule(.78,.34).setTranslation(this.spawn.x,this.spawn.y,this.spawn.z);
   this.collider=physics.createCollider(desc);this.characterController=physics.createCharacterController(.02);
  }
- reset(){this.object.position.copy(this.spawn);this.velocity.set(0,0,0);this.collider.setTranslation({x:this.spawn.x,y:this.spawn.y,z:this.spawn.z},true);this.humanoid.resetPose();}
+ reset(){this.object.position.copy(this.spawn);this.velocity.set(0,0,0);this.collider.setTranslation({x:this.spawn.x,y:this.spawn.y,z:this.spawn.z});this.humanoid.resetPose();}
  update(dt:number){
   const input=this.input.move;this.forward.set(-Math.sin(this.camera.yaw),0,-Math.cos(this.camera.yaw));this.right.set(Math.cos(this.camera.yaw),0,-Math.sin(this.camera.yaw));
   this.relative.copy(this.right).multiplyScalar(input.x).addScaledVector(this.forward,input.y);if(this.relative.lengthSq()>1)this.relative.normalize();
