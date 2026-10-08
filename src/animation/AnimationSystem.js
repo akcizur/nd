@@ -43,9 +43,9 @@ export class AnimationSystem {
 
     for (const clip of clips) this._registerClip(clip);
 
-    // UAL1 is authored for the Universal skeleton. Bind the canonical clips
-    // directly: no runtime retargeting, no fuzzy locomotion selection.
-    const exact = name => this.actions[this._key(name)] || null;
+    // UAL1 is authored for the Universal skeleton. CharacterPackLoader
+    // already sanitized/rebound the tracks to this player's bones, so here we
+    // only select the canonical in-place locomotion clips.
 
     this.actions.idle = exact('Idle_Loop');
     this.actions.walk = exact('Walk_Loop');
