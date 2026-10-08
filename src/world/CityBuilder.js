@@ -46,49 +46,46 @@ export class CityBuilder {
   }
 
   _buildRoads(blocks, blockSize, roadWidth) {
-    const total = blocks * blockSize * 2;
+    const total = (blocks * 2 + 1) * blockSize;
     const roadMat = this._material(0x25272b, 0.96);
-    const laneMat = this._material(0x6d6f73, 0.62);
+    const centerMat = this._material(0x8f9092, 0.68);
 
-    const horizontal = new THREE.Mesh(
-      new THREE.PlaneGeometry(total, blocks * 2 * roadWidth + blockSize),
-      roadMat
-    );
-    horizontal.rotation.x = -Math.PI / 2;
-    horizontal.position.y = 0.006;
-    this.root.add(horizontal);
-
-    const vertical = horizontal.clone();
-    vertical.geometry = new THREE.PlaneGeometry(blocks * 2 * roadWidth + blockSize, total);
-    vertical.position.y = 0.007;
-    this.root.add(vertical);
-
-    const half = blocks * blockSize;
     for (let i = -blocks; i <= blocks; i++) {
       const c = i * blockSize;
+
+      const horizontal = new THREE.Mesh(
+        new THREE.PlaneGeometry(total, roadWidth),
+        roadMat
+      );
+      horizontal.rotation.x = -Math.PI / 2;
+      horizontal.position.set(0, 0.006, c);
+      this.root.add(horizontal);
+
+      const vertical = new THREE.Mesh(
+        new THREE.PlaneGeometry(roadWidth, total),
+        roadMat
+      );
+      vertical.rotation.x = -Math.PI / 2;
+      vertical.position.set(c, 0.007, 0);
+      this.root.add(vertical);
+
       const lineH = new THREE.Mesh(
-        new THREE.PlaneGeometry(total, 0.08),
-        laneMat
+        new THREE.PlaneGeometry(total, 0.055),
+        centerMat
       );
       lineH.rotation.x = -Math.PI / 2;
       lineH.position.set(0, 0.012, c);
       this.root.add(lineH);
 
       const lineV = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.08, total),
-        laneMat
+        new THREE.PlaneGeometry(0.055, total),
+        centerMat
       );
       lineV.rotation.x = -Math.PI / 2;
       lineV.position.set(c, 0.013, 0);
       this.root.add(lineV);
-
-      if (Math.abs(c) <= half + 0.01) {
-        this._addCrossing(c, roadWidth, 'x');
-        this._addCrossing(c, roadWidth, 'z');
-      }
     }
   }
-
   _addCrossing(coord, roadWidth, axis) {
     const zebra = this._material(0xd6d6d6, 0.8);
     const root = new THREE.Group();
