@@ -19,7 +19,7 @@ The reference project is Godot 4. Its README identifies Mixamo as its character 
 
 - TypeScript
 - Three.js 0.186.1
-- Rapier 3D 0.21.0
+- Rapier 3D 0.18.2
 - Phaser 4.2.1
 - Vite 8.3.3
 - GitHub Actions + GitHub Pages
