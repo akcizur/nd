@@ -229,8 +229,12 @@ async function loadPlayer() {
 
     createPlayerRig(gltf.scene, 1.8);
 
-    // Quaternius UAL uses the same humanoid skeleton naming, so bind clips by bone name.
-    const clips = characterPack.createPlayerClips(animationLibrary);
+    // Rebind UAL tracks to the actual player bones and strip only a separate
+    // skeleton-root position track. Rapier remains the sole owner of world position.
+    const clips = characterPack.retargetClips(
+      characterPack.createPlayerClips(animationLibrary),
+      playerVisual
+    );
 
     if (clips.length) {
       playerAnimation = new AnimationSystem(playerVisual);
