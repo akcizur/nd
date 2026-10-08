@@ -12,6 +12,7 @@ import { SettingsMenu } from './ui/SettingsMenu.js';
 import { PlayerController } from './player/PlayerController.js';
 import { CameraSystem } from './camera/CameraSystem.js';
 import { AnimationSystem } from './animation/AnimationSystem.js';
+import { PhysicsWorld } from './physics/PhysicsWorld.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0b0b);
@@ -56,6 +57,26 @@ const grid = new THREE.GridHelper(160, 80, 0x666666, 0x252525);
 grid.position.y = 0.006;
 world.add(grid);
 
+// Small physical test obstacles: they make the capsule controller's
+// wall blocking + autostep behavior immediately visible while the scene
+// is still intentionally minimal.
+function addPhysicsBox({ x, y, z, width, height, depth }) {
+  physicsWorld?.addStaticBox(x, y, z, width, height, depth);
+
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, depth),
+    new THREE.MeshStandardMaterial({
+      color: 0x454545,
+      roughness: 0.9,
+      metalness: 0,
+    })
+  );
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  world.add(mesh);
+}
+
 const loader = new GLTFLoader();
 const characterPack = new CharacterPackLoader(loader);
 
@@ -65,6 +86,8 @@ let playerCollider = null;
 let playerAnimation = null;
 let playerController = null;
 let cameraSystem = null;
+let physicsWorld = null;
+let playerPhysics = null;
 
 function createPlayerRig(model, targetHeight = 1.8) {
   const rig = new THREE.Group();
@@ -366,10 +389,8 @@ const hudObjective = document.querySelector('#objective');
 const hudSpeed = document.querySelector('#speed');
 const hudHint = document.querySelector('#hint');
 
-function updatePlayer(dt) {
+function updatePlayer() {
   if (!playerController || gameState.current !== GameState.PLAYING) return;
-
-  playerController.update(dt);
 
   const speed = playerController.horizontalSpeed;
   const maxSpeed = playerController.input.sprint
@@ -385,7 +406,7 @@ function updatePlayer(dt) {
     strafe: playerController.animationInput.strafe,
     crouched: false,
     sprinting: Boolean(playerController.input.sprint),
-    dt,
+    dt: 1 / 60,
   });
 
   hudSpeed.textContent = playerController.state.toUpperCase() + ' · ' +
@@ -416,9 +437,19 @@ function updateInteraction() {
 const clock = new THREE.Clock();
 
 async function start() {
-  hudObjective.textContent = 'Loading character…';
+  hudObjective.textContent = 'Initializing physics…';
+
+  physicsWorld = await PhysicsWorld.create();
+  physicsWorld.addGround(160);
+
+  addPhysicsBox({ x: 0, y: 0.15, z: -4, width: 3.0, height: 0.3, depth: 1.2 });
+  addPhysicsBox({ x: 2.6, y: 0.35, z: -6.0, width: 1.4, height: 0.7, depth: 1.4 });
 
   await loadPlayer();
+
+  // One authoritative Rapier capsule owns gameplay collisions.
+  // The Three.js capsule remains purely a hidden visual/debug proxy.
+  playerPhysics = physicsWorld.createCharacter(player);
 
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
@@ -427,6 +458,8 @@ async function start() {
     object: player,
     input: input.input,
     camera: cameraSystem,
+    physicsWorld,
+    physicsCharacter: playerPhysics,
     movementSettings,
   });
 
@@ -446,7 +479,15 @@ function animate() {
   input.update();
 
   if (gameState.current === GameState.PLAYING) {
-    updatePlayer(dt);
+    physicsWorld?.step(dt, fixedDt => {
+      playerController?.fixedUpdate(fixedDt);
+    });
+
+    if (playerPhysics) {
+      physicsWorld?.syncObject(player, playerPhysics);
+    }
+
+    updatePlayer();
     playerAnimation?.update(dt);
     updateCamera(dt);
     updateInteraction();
@@ -456,7 +497,7 @@ function animate() {
     dt,
     gameState: gameState.current,
     player: playerController,
-    physics: null,
+    physics: physicsWorld,
     vehicle: null,
     inVehicle: false,
   });
