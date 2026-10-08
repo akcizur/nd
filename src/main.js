@@ -386,7 +386,7 @@ const hudObjective = document.querySelector('#objective');
 const hudSpeed = document.querySelector('#speed');
 const hudHint = document.querySelector('#hint');
 
-function updatePlayer() {
+function updatePlayer(dt) {
   if (!playerController || gameState.current !== GameState.PLAYING) return;
 
   const speed = playerController.horizontalSpeed;
@@ -402,7 +402,7 @@ function updatePlayer() {
     runSpeed: playerController.runSpeed,
     sprintSpeed: playerController.sprintSpeed,
     justLanded: playerController.justLanded,
-    dt: Math.min(clock.getDelta(), 1 / 30),
+    dt,
   });
 
   hudSpeed.textContent = playerController.state.toUpperCase() + ' · ' +
@@ -483,7 +483,7 @@ function animate() {
       physicsWorld?.syncObject(player, playerPhysics);
     }
 
-    updatePlayer();
+    updatePlayer(dt);
     playerAnimation?.update(dt);
     updateCamera(dt);
     updateInteraction();
