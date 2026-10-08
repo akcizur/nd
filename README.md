@@ -133,11 +133,11 @@ The character pipeline supports:
 - Quaternius GLTF / GLB humanoid models
 - CC0 character assets
 - shared Universal Animation Library locomotion
-- direct UAL1 clip binding to the Universal humanoid rig
+- sanitized UAL1 clip binding to the Universal humanoid rig
 - continuous idle / walk / jog / sprint blending
 - jump / fall / landing phases driven by Rapier state
 - animation playback rate derived from actual horizontal speed
-- no runtime bone retargeting
+- root-motion-safe runtime bone-track rebinding
 
 The controller is intentionally independent from the final character asset, so the model can be replaced without rewriting movement logic.
 
@@ -205,7 +205,7 @@ Production base path:
 /nd/
 ```
 
-Deployment is handled by GitHub Actions after changes are pushed to `main`.
+`main` is the canonical production branch. GitHub Actions deploys it automatically after each push.
 
 ## Asset and interaction foundation
 
@@ -270,3 +270,7 @@ Third-party assets retain their original licenses and attribution requirements.
 
 - Three.js — https://threejs.org/
 - Vite — https://vite.dev/
+
+## Stable branch policy
+
+The repository production source of truth is `main`. Changes should be integrated into `main` and deployed from `main`; no alternate branch is required for the runtime.
