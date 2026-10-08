@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { CharacterPackLoader } from './assets/CharacterPackLoader.js';
 import './style.css';
 import { GameState, GameStateManager } from './core/GameState.js';
 import { InputManager } from './core/InputManager.js';
@@ -11,7 +9,8 @@ import { GameMenu } from './ui/GameMenu.js';
 import { SettingsMenu } from './ui/SettingsMenu.js';
 import { PlayerController } from './player/PlayerController.js';
 import { CameraSystem } from './camera/CameraSystem.js';
-import { AnimationSystem } from './animation/AnimationSystem.js';
+import { ProceduralCharacterAnimation } from './animation/ProceduralCharacterAnimation.js';
+import { createSimpleHumanoid } from './player/SimpleHumanoid.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
 import { InteractionSystem } from './interaction/InteractionSystem.js';
 
@@ -85,9 +84,6 @@ function addPhysicsBox({ x, y, z, width, height, depth, interaction = null }) {
   return mesh;
 }
 
-const loader = new GLTFLoader();
-const characterPack = new CharacterPackLoader(loader);
-
 let player = null;
 let playerVisual = null;
 let playerCollider = null;
@@ -127,11 +123,10 @@ function createPlayerRig(model, targetHeight = 1.8) {
   const bounds = new THREE.Box3().setFromObject(model);
   model.position.y = -bounds.min.y + 0.01;
 
-  // Quaternius Universal Base mesh faces +Z in its source orientation.
-  // The controller/world use -Z as character forward, so keep the visual
-  // model on a fixed 180° yaw offset while the gameplay rig remains canonical.
-  model.rotation.y = Math.PI;
-  model.userData.forwardYawOffset = Math.PI;
+  // The procedural character is authored with Three.js -Z as its forward axis,
+  // matching the controller and camera conventions. No asset-specific yaw fix is needed.
+  model.rotation.y = 0;
+  model.userData.forwardYawOffset = 0;
 
   model.traverse(node => {
     if (!node.isMesh) return;
@@ -151,106 +146,21 @@ function createPlayerRig(model, targetHeight = 1.8) {
   return rig;
 }
 
-function createTestFigure() {
-  const visual = new THREE.Group();
-  visual.name = 'PlayableCharacter';
-
-  const skin = new THREE.MeshStandardMaterial({ color: 0x8ec5ff, roughness: 0.8 });
-  const accent = new THREE.MeshStandardMaterial({ color: 0xffd21f, roughness: 0.75 });
-
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.23, 0.8, 5, 10), skin);
-  torso.position.y = 1.08;
-  torso.castShadow = true;
-  visual.add(torso);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 18), accent);
-  head.position.y = 1.82;
-  head.castShadow = true;
-  visual.add(head);
-
-  const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.62, 4, 8), skin);
-  leftArm.position.set(-0.38, 1.2, 0);
-  leftArm.rotation.z = 0.35;
-  leftArm.castShadow = true;
-  visual.add(leftArm);
-
-  const rightArm = leftArm.clone();
-  rightArm.position.x = 0.38;
-  rightArm.rotation.z = -0.35;
-  visual.add(rightArm);
-
-  const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.7, 4, 8), skin);
-  leftLeg.position.set(-0.14, 0.38, 0);
-  leftLeg.castShadow = true;
-  visual.add(leftLeg);
-
-  const rightLeg = leftLeg.clone();
-  rightLeg.position.x = 0.14;
-  visual.add(rightLeg);
-
-  visual.userData.testFigure = {
-    torso,
-    head,
-    leftArm,
-    rightArm,
-    leftLeg,
-    rightLeg,
-  };
-
-  createPlayerRig(visual, 1);
-  playerAnimation = {
-    update(dt) {
-      const parts = playerVisual?.userData?.testFigure;
-      if (!parts || !playerController) return;
-
-      const swing = Math.sin(performance.now() * 0.008 * (1 + playerController.horizontalSpeed * 0.6)) * 0.7;
-      const speedState = playerController.state;
-      const idleSwing = speedState === 'idle' ? 0.12 : 0.45;
-
-      parts.leftArm.rotation.x = speedState === 'idle' ? 0.15 : swing;
-      parts.rightArm.rotation.x = speedState === 'idle' ? -0.15 : -swing;
-      parts.leftLeg.rotation.x = speedState === 'idle' ? -0.1 : -swing * 1.2;
-      parts.rightLeg.rotation.x = speedState === 'idle' ? 0.1 : swing * 1.2;
-      parts.torso.rotation.z = playerController.horizontalSpeed > 0.1 ? playerController.animationInput.strafe * 0.18 : 0;
-      parts.head.rotation.y = playerController.animationInput.forward * 0.15;
-      parts.head.position.y = 1.82 + (playerController.grounded ? 0 : Math.sin(performance.now() * 0.02) * 0.04);
-    },
-    updateLocomotion() {},
-  };
-}
-
 async function loadPlayer() {
-  try {
-    // Load the Quaternius humanoid and the shared Universal Animation Library in parallel.
-    const [gltf, animationLibrary] = await Promise.all([
-      characterPack.loadPlayer(),
-      characterPack.loadAnimationLibrary(),
-    ]);
+  // Primary runtime character: lightweight, self-contained, and deterministic.
+  // No third-party model download is required, so GitHub Pages works offline after the page loads.
+  const { model } = createSimpleHumanoid();
 
-    createPlayerRig(gltf.scene, 1.8);
+  createPlayerRig(model, 1.8);
+  playerAnimation = new ProceduralCharacterAnimation(playerVisual);
 
-    // Rebind UAL tracks to the actual player bones and strip only a separate
-    // skeleton-root position track. Rapier remains the sole owner of world position.
-    const clips = characterPack.retargetClips(
-      characterPack.createPlayerClips(animationLibrary),
-      playerVisual
-    );
+  console.info('[PLAYER] Procedural humanoid loaded', {
+    model: 'simple-low-poly',
+    animations: 'procedural',
+    externalRuntimeAssets: false,
+  });
 
-    if (clips.length) {
-      playerAnimation = new AnimationSystem(playerVisual);
-      playerAnimation.bind(new THREE.AnimationMixer(playerVisual), clips);
-    }
-
-    console.info(
-      '[PLAYER] Quaternius Superhero Male loaded',
-      { animationClips: clips.length }
-    );
-    return;
-  } catch (error) {
-    console.warn('Quaternius player failed, using test figure fallback:', error);
-  }
-
-  createTestFigure();
+  return;
 }
 
 const input = new InputManager();
@@ -411,7 +321,9 @@ function updatePlayer(dt) {
     grounded: playerController.grounded,
     verticalVelocity: playerController.velocityY,
     strafe: playerController.animationInput.strafe,
+    forward: playerController.animationInput.forward,
     sprinting: Boolean(playerController.input.sprint),
+    crouched: Boolean(playerController.input.crouch),
     walkSpeed: playerController.walkSpeed,
     runSpeed: playerController.runSpeed,
     sprintSpeed: playerController.sprintSpeed,

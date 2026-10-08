@@ -23,11 +23,12 @@ The project is currently focused on one thing: making character movement and thi
 - touch / virtual joystick controls
 - gamepad input
 - responsive desktop and mobile layout
-- Quaternius Universal Base Character loading with shared Universal Animation Library locomotion clips
-- physics-driven UAL1 locomotion blendspace (idle / walk / jog / sprint)
-- buffered jump + coyote-time jump handling
-- dedicated jump / fall / landing animation phases
+- self-contained low-poly procedural humanoid model
+- procedural skeletal-style locomotion animation (idle / walk / run / sprint)
+- procedural directional locomotion (forward / backward / strafe)
+- procedural crouch / jump / fall / landing poses
 - animation timing derived from real capsule velocity
+- zero runtime third-party character downloads
 - simple flat test ground
 - lightweight scene designed for movement testing
 - GitHub Pages deployment
@@ -128,25 +129,35 @@ The camera is a dedicated third-person system.
 
 ## Character
 
-The character pipeline supports:
+The runtime now uses a project-authored low-poly humanoid built from Three.js primitives.
 
-- Quaternius GLTF / GLB humanoid models
-- CC0 character assets
-- shared Universal Animation Library locomotion
-- sanitized UAL1 clip binding to the Universal humanoid rig
-- continuous idle / walk / jog / sprint blending
-- jump / fall / landing phases driven by Rapier state
-- animation playback rate derived from actual horizontal speed
-- root-motion-safe runtime bone-track rebinding
+The model is assembled as a small procedural rig with named joints for:
 
-The controller is intentionally independent from the final character asset, so the model can be replaced without rewriting movement logic.
+- hips / spine / chest / neck / head
+- shoulders / upper arms / forearms / hands
+- thighs / shins / feet
+
+Animation is driven directly from real gameplay velocity and input:
+
+```text
+speed + movement direction + grounded state
+                    ↓
+        procedural animation pose
+                    ↓
+idle → walk → run → sprint
+             ↘ crouch
+             ↘ jump → fall → land
+```
+
+The visual character is separated from the Rapier capsule, so changing the mesh does not change gameplay collision. No external character file is required to start the game.
+
 
 ## Project architecture
 
 ```text
 src/
-├── animation/       Animation state and locomotion
-├── assets/          Character / asset loading
+├── animation/       Procedural character animation
+├── assets/          Optional world/asset loaders
 ├── camera/          Third-person camera
 ├── core/            Game state, input facade and debug
 ├── input/           Keyboard, mouse, gamepad and touch input
