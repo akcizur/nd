@@ -56,7 +56,8 @@ export class PhysicsWorld {
   }
 
   addGround(size = 320) {
-    return this.addStaticBox(0, -0.06, 0, size, 0.1, size);
+    // Top surface is exactly y=0, matching the visual ground plane.
+    return this.addStaticBox(0, -0.05, 0, size, 0.1, size);
   }
 
   createCharacter(object) {
@@ -68,7 +69,9 @@ export class PhysicsWorld {
       )
     );
     const collider = this.world.createCollider(
-      RAPIER.ColliderDesc.capsule(0.55, 0.38)
+      // 1.86 m overall capsule: 0.34 m radius + 0.59 m half-cylinder length.
+      // The gameplay capsule is intentionally independent from the rendered mesh.
+      RAPIER.ColliderDesc.capsule(0.59, 0.34)
         .setFriction(0.0)
         .setRestitution(0.0),
       body
@@ -327,6 +330,17 @@ export class PhysicsWorld {
       physicsObject.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     }
     this.syncObject(object, physicsObject);
+  }
+
+  resetCharacter(character, position = { x: 0, y: 0, z: 0 }) {
+    if (!character) return;
+    character.body.setTranslation({
+      x: position.x,
+      y: position.y + character.footOffset,
+      z: position.z,
+    }, true);
+    character.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    character.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
 
   setCharacterEnabled(character, enabled) {
