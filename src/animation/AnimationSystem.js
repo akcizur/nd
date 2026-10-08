@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 
 const LOOPING = ['idle', 'walk', 'run', 'sprint'];
-const AIR = ['jump', 'fall', 'land'];
-
 export class AnimationSystem {
   constructor(object) {
     this.object = object;
@@ -65,7 +63,7 @@ export class AnimationSystem {
     }
 
     this.locomotion.enabled = Boolean(this.actions.idle);
-    console.info('[ANIM] UAL1 direct binding', {
+    console.info('[ANIM] UAL1 sanitized player binding', {
       idle: Boolean(this.actions.idle),
       walk: Boolean(this.actions.walk),
       jog: Boolean(this.actions.run),
