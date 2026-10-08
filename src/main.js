@@ -66,10 +66,11 @@ let playerAnimation = null;
 let playerController = null;
 let cameraSystem = null;
 
-function createPlayerRig(model, scale = 0.92) {
+function createPlayerRig(model, targetHeight = 1.8) {
   const rig = new THREE.Group();
   rig.name = 'PlayerCharacter';
 
+  // Gameplay collision proxy: always invisible, independently sized from the visual mesh.
   const collider = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.34, 1.05, 8, 12),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
@@ -79,13 +80,23 @@ function createPlayerRig(model, scale = 0.92) {
   collider.position.y = 0.865;
   rig.add(collider);
 
-  model.scale.setScalar(scale);
+  // Normalize the imported character to a real human-like ~1.8 m height.
+  model.updateMatrixWorld(true);
+  const sourceBounds = new THREE.Box3().setFromObject(model);
+  const sourceHeight = sourceBounds.max.y - sourceBounds.min.y;
+  const normalizedScale = sourceHeight > 0.001
+    ? targetHeight / sourceHeight
+    : 1;
+
+  model.scale.setScalar(normalizedScale);
   model.updateMatrixWorld(true);
 
   const bounds = new THREE.Box3().setFromObject(model);
   model.position.y = -bounds.min.y + 0.01;
 
-  model.rotation.y = Math.PI;
+  // Quaternius glTF uses the standard humanoid facing axis; the rig itself rotates.
+  model.rotation.y = 0;
+
   model.traverse(node => {
     if (!node.isMesh) return;
     node.castShadow = true;
@@ -174,10 +185,19 @@ function createTestFigure() {
 
 async function loadPlayer() {
   try {
-    const gltf = await characterPack.loadPlayer();
-    const clips = characterPack.createPlayerClips(gltf);
+    // Load the Quaternius humanoid and the shared Universal Animation Library in parallel.
+    const [gltf, animationLibrary] = await Promise.all([
+      characterPack.loadPlayer(),
+      characterPack.loadAnimationLibrary(),
+    ]);
 
-    createPlayerRig(gltf.scene, 2.4);
+    createPlayerRig(gltf.scene, 1.8);
+
+    // Quaternius UAL uses the same humanoid skeleton naming, so bind clips by bone name.
+    const clips = characterPack.retargetClips(
+      characterPack.createPlayerClips(animationLibrary),
+      playerVisual
+    );
 
     if (clips.length) {
       playerAnimation = new AnimationSystem(playerVisual);
@@ -185,9 +205,13 @@ async function loadPlayer() {
       playerAnimation.play('idle', 0);
     }
 
+    console.info(
+      '[PLAYER] Quaternius Superhero Male loaded',
+      { animationClips: clips.length }
+    );
     return;
   } catch (error) {
-    console.warn('Yellow C-1 player failed, using test figure fallback:', error);
+    console.warn('Quaternius player failed, using test figure fallback:', error);
   }
 
   createTestFigure();
