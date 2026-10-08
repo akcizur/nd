@@ -47,3 +47,18 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  cleanup:
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Remove obsolete branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for branch in nd-stable stable-character-animation refactor/robust-gameplay-system; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}" || true
+          done
