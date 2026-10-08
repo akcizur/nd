@@ -6,14 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "assets:inspect": "node tools/inspect-assets.mjs",
+    "assets:optimize": "node tools/optimize-assets.mjs"
   },
   "dependencies": {
     "@mavonengine/core": "^0.0.20",
     "three": "^0.184.0",
-    "@dimforge/rapier3d-compat": "0.18.2"
+    "@dimforge/rapier3d-compat": "0.18.2",
+    "three-mesh-bvh": "^0.9.15"
   },
   "devDependencies": {
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "@gltf-transform/cli": "^4.5.1"
   }
 }
