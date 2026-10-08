@@ -13,6 +13,10 @@ import { ProceduralCharacterAnimation } from './animation/ProceduralCharacterAni
 import { createSimpleHumanoid } from './player/SimpleHumanoid.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
 import { InteractionSystem } from './interaction/InteractionSystem.js';
+import { CityBuilder } from './world/CityBuilder.js';
+import { CitySimulation } from './world/CitySimulation.js';
+import { createSimpleCar } from './vehicle/SimpleCar.js';
+import { VehicleController } from './vehicle/VehicleController.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0b0b);
@@ -42,7 +46,7 @@ const world = new THREE.Group();
 scene.add(world);
 
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(160, 160),
+  new THREE.PlaneGeometry(430, 430),
   new THREE.MeshStandardMaterial({
     color: 0x303030,
     roughness: 0.94,
@@ -53,11 +57,8 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 world.add(ground);
 
-const grid = new THREE.GridHelper(160, 80, 0x666666, 0x252525);
-grid.position.y = 0.006;
-world.add(grid);
-
-// Small physical test obstacles: they make the capsule controller's
+// The city itself is the visual navigation grid; avoid a debug grid in production.
+: they make the capsule controller's
 // wall blocking + autostep behavior immediately visible while the scene
 // is still intentionally minimal.
 function addPhysicsBox({ x, y, z, width, height, depth, interaction = null }) {
@@ -93,6 +94,12 @@ let cameraSystem = null;
 let physicsWorld = null;
 let playerPhysics = null;
 let interactionSystem = null;
+let cityBuilder = null;
+let citySimulation = null;
+let vehicle = null;
+let vehicleController = null;
+let vehiclePhysics = null;
+let inVehicle = false;
 const testObstacles = [];
 
 function createPlayerRig(model, targetHeight = 1.8) {
@@ -224,10 +231,10 @@ const aboutMenu = document.createElement('section');
 aboutMenu.className = 'menu-screen about-menu';
 aboutMenu.innerHTML = `
   <div class="menu-card">
-    <div class="menu-kicker">ND / MOVEMENT</div>
+    <div class="menu-kicker">ND / CITY</div>
     <h2>THIRD PERSON</h2>
-    <p>Simple character movement prototype.</p>
-    <p>WASD / touch joystick + third-person camera.</p>
+    <p>Lightweight open-city browser sandbox.</p>
+    <p>Walk, sprint, crouch, enter a car and explore.</p>
     <button data-menu="back">BACK</button>
   </div>`;
 document.body.appendChild(aboutMenu);
@@ -269,7 +276,11 @@ function closeSettings() {
 function enterPlay() {
   if (!player || !playerController || !cameraSystem) return;
 
-  playerController.reset(new THREE.Vector3(0, 0, 0), 0);
+  inVehicle = false;
+  player.visible = true;
+  mobileControls.setVehicleMode(false);
+  playerController.reset(new THREE.Vector3(0, 0, 8), 0);
+  vehicleController?.reset(new THREE.Vector3(0, 0, 4), 0);
   cameraSystem.reset(player);
   mainMenu.hide();
   aboutMenu.classList.remove('visible');
@@ -287,10 +298,32 @@ function resumeGame() {
 
 function restartGame() {
   if (!player) return;
-  playerController.reset(new THREE.Vector3(0, 0, 0), 0);
+  inVehicle = false;
+  player.visible = true;
+  mobileControls.setVehicleMode(false);
+  playerController.reset(new THREE.Vector3(0, 0, 8), 0);
+  vehicleController?.reset(new THREE.Vector3(0, 0, 4), 0);
   cameraSystem.reset(player);
   gameMenu.close();
   gameState.set(GameState.PLAYING);
+}
+
+function enterVehicle() {
+  if (!vehicleController || !vehicleController.isNearby(player.position)) return;
+  inVehicle = true;
+  player.visible = false;
+  mobileControls.setVehicleMode(true);
+  cameraSystem.reset(vehicle);
+}
+
+function exitVehicle() {
+  if (!vehicleController) return;
+  const exit = vehicleController.getExitPosition();
+  inVehicle = false;
+  playerController.reset(exit, vehicle.rotation.y);
+  player.visible = true;
+  mobileControls.setVehicleMode(false);
+  cameraSystem.reset(player);
 }
 
 function returnToMainMenu() {
@@ -336,11 +369,16 @@ function updatePlayer(dt) {
 }
 
 function updateCamera(dt) {
+  const subject = inVehicle ? vehicle : player;
+  const speed = inVehicle
+    ? Math.abs(vehicleController?.speed || 0)
+    : playerController?.horizontalSpeed || 0;
+
   cameraSystem?.update(dt, {
-    subject: player,
-    vehicle: false,
+    subject,
+    vehicle: inVehicle,
     input: input.input,
-    speed: playerController?.horizontalSpeed || 0,
+    speed,
   });
 }
 
@@ -353,34 +391,75 @@ function updateInteraction() {
     return;
   }
 
-  const target = interactionSystem?.update({ maxDistance: 3 });
-  const prompt = target?.data?.prompt;
+  if (input.consume('interact')) {
+    if (inVehicle) {
+      exitVehicle();
+      return;
+    }
 
-  hudObjective.textContent = target
-    ? prompt || 'Interact'
-    : 'Third-person movement';
+    if (vehicleController?.isNearby(player.position)) {
+      enterVehicle();
+      return;
+    }
 
-  hudHint.textContent = target
-    ? 'E · interakce'
-    : 'WASD · SHIFT běh · RMB kamera';
-
-  if (target && input.consume('interact')) {
-    target.data.action?.(target);
+    const target = interactionSystem?.update({ maxDistance: 3 });
+    target?.data?.action?.(target);
+    return;
   }
+
+  const target = interactionSystem?.update({ maxDistance: 3 });
+  const nearCar = !inVehicle && vehicleController?.isNearby(player.position);
+
+  hudObjective.textContent = nearCar
+    ? 'Vehicle ready'
+    : target
+      ? target.data?.prompt || 'Interact'
+      : inVehicle
+        ? 'Driving'
+        : 'Explore the city';
+
+  hudHint.textContent = inVehicle
+    ? 'W/S · throttle · A/D · steer · J · handbrake · E · exit'
+    : nearCar
+      ? 'E · enter vehicle'
+      : 'WASD · SHIFT sprint · C crouch · SPACE jump · RMB camera';
 }
 
 const clock = new THREE.Clock();
 
 async function start() {
-  hudObjective.textContent = 'Initializing physics…';
+  hudObjective.textContent = 'Building city…';
 
   physicsWorld = await PhysicsWorld.create();
-  physicsWorld.addGround(160);
+  physicsWorld.addGround(430);
 
-  addPhysicsBox({ x: 0, y: 0.15, z: -4, width: 3.0, height: 0.3, depth: 1.2 });
-  addPhysicsBox({ x: 2.6, y: 0.35, z: -6.0, width: 1.4, height: 0.7, depth: 1.4 });
+  cityBuilder = new CityBuilder(world, physicsWorld);
+  cityBuilder.build({
+    blocks: 7,
+    blockSize: 26,
+    roadWidth: 9,
+    seed: 42,
+  });
+
+  citySimulation = new CitySimulation(world, {
+    trafficCount: 16,
+    pedestrianCount: 20,
+  });
+  citySimulation.init();
 
   await loadPlayer();
+
+  vehicle = createSimpleCar();
+  vehicle.position.set(0, 0, 4);
+  world.add(vehicle);
+  vehiclePhysics = physicsWorld.createVehicle(vehicle);
+  vehicleController = new VehicleController({
+    object: vehicle,
+    wheels: vehicle.userData.vehicle.wheels,
+    input: input.input,
+    physics: physicsWorld,
+  });
+  vehicleController.bindPhysics(vehiclePhysics);
 
   // One authoritative Rapier capsule owns gameplay collisions.
   // The Three.js capsule remains purely a hidden visual/debug proxy.
@@ -395,27 +474,6 @@ async function start() {
   });
   interactionSystem.setRoot(world);
 
-  const obstacleA = testObstacles[0];
-  const obstacleB = testObstacles[1];
-
-  if (obstacleA) {
-    interactionSystem.register(obstacleA, {
-      prompt: 'Physical obstacle',
-      action: ({ object }) => {
-        console.info('[INTERACTION] obstacle A', object.name);
-      },
-    });
-  }
-
-  if (obstacleB) {
-    interactionSystem.register(obstacleB, {
-      prompt: 'Physical obstacle',
-      action: ({ object }) => {
-        console.info('[INTERACTION] obstacle B', object.name);
-      },
-    });
-  }
-
   playerController = new PlayerController({
     object: player,
     input: input.input,
@@ -425,7 +483,8 @@ async function start() {
     movementSettings,
   });
 
-  playerController.reset(new THREE.Vector3(0, 0, 0), 0);
+  playerController.reset(new THREE.Vector3(0, 0, 8), 0);
+  vehicleController.reset(new THREE.Vector3(0, 0, 4), 0);
   cameraSystem.reset(player);
 
   hudObjective.textContent = 'Ready · PLAY';
@@ -441,14 +500,23 @@ function animate() {
   input.update();
 
   if (gameState.current === GameState.PLAYING) {
+    if (inVehicle) {
+      vehicleController?.update(dt);
+    }
+
     physicsWorld?.step(dt, fixedDt => {
-      playerController?.fixedUpdate(fixedDt);
+      if (!inVehicle) playerController?.fixedUpdate(fixedDt);
     });
 
-    if (playerPhysics) {
+    if (!inVehicle && playerPhysics) {
       physicsWorld?.syncObject(player, playerPhysics);
     }
 
+    if (inVehicle && vehiclePhysics) {
+      vehicleController?.syncFromPhysics();
+    }
+
+    citySimulation?.update(dt);
     updatePlayer(dt);
     playerAnimation?.update(dt);
     updateCamera(dt);
@@ -460,8 +528,8 @@ function animate() {
     gameState: gameState.current,
     player: playerController,
     physics: physicsWorld,
-    vehicle: null,
-    inVehicle: false,
+    vehicle: inVehicle ? vehicleController : null,
+    inVehicle,
   });
 
   renderer.render(scene, camera);
