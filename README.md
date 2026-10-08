@@ -32,6 +32,9 @@ The project is currently focused on one thing: making character movement and thi
 - lightweight scene designed for movement testing
 - GitHub Pages deployment
 - Vite production build
+- dedicated AssetManifest + production asset pipeline
+- glTF Transform optimization tooling
+- BVH-accelerated static interaction raycasts
 
 ## Current scope
 
@@ -204,6 +207,10 @@ Production base path:
 
 Deployment is handled by GitHub Actions after changes are pushed to `main`.
 
+## Asset and interaction foundation
+
+The repository now separates source assets from optimized runtime assets. `AssetManifest` is the single runtime registry layer, glTF Transform provides optimization tooling, and `InteractionSystem` provides BVH-accelerated camera raycasts for static world meshes. Rapier remains authoritative for gameplay collision.
+
 ## Development priorities
 
 ### P0 — Movement foundation
@@ -217,7 +224,7 @@ Deployment is handled by GitHub Actions after changes are pushed to `main`.
 - stable third-person camera
 - camera collision
 
-### P1 — Character quality
+### P1 — Character and world quality
 
 - capsule/visual alignment tuning
 - physical obstacle collision validation
@@ -225,8 +232,9 @@ Deployment is handled by GitHub Actions after changes are pushed to `main`.
 - continuous locomotion blend tuning
 - Quaternius UAL clip coverage
 - foot contact / foot-skate reduction
-- landing polish
-- crouch locomotion
+- local production asset migration
+- modular street / house / garage assets
+- interaction targets and world props
 - improved touch controls
 
 ### P2 — World
