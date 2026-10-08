@@ -12,7 +12,6 @@ function installBVH() {
 
   THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
   THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
-  THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
   bvhInstalled = true;
 }
@@ -59,7 +58,10 @@ export class InteractionSystem {
 
       if (!object.geometry.boundsTree) {
         object.geometry.computeBoundsTree();
+        object.raycast = acceleratedRaycast;
         built += 1;
+      } else if (object.raycast !== acceleratedRaycast) {
+        object.raycast = acceleratedRaycast;
       }
     });
 
@@ -72,6 +74,9 @@ export class InteractionSystem {
     root.traverse(object => {
       if (!object.isMesh || !object.geometry?.boundsTree) return;
       object.geometry.disposeBoundsTree();
+      if (object.raycast === acceleratedRaycast) {
+        delete object.raycast;
+      }
     });
   }
 
