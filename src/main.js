@@ -202,7 +202,6 @@ async function loadPlayer() {
     if (clips.length) {
       playerAnimation = new AnimationSystem(playerVisual);
       playerAnimation.bind(new THREE.AnimationMixer(playerVisual), clips);
-      playerAnimation.play('idle', 0);
     }
 
     console.info(
