@@ -43,7 +43,8 @@ export class PlayerController {
     this.deceleration = 17;
     this.airAcceleration = 3.0;
 
-    this.rotationSharpness = 14;
+    this.rotationSharpness = 18;
+    this.visualRotationSharpness = 11;
     this.gravity = 9.81;
     this.jumpSpeed = 5.4;
 
@@ -267,9 +268,27 @@ export class PlayerController {
         Math.PI * 2
       ) - Math.PI;
 
+      // Gameplay body keeps a responsive heading.
       this.object.rotation.y += delta * (
         1 - Math.exp(-this.rotationSharpness * dt)
       );
+
+      // Visuals use a separate smooth heading so the mesh does not snap
+      // when the movement vector changes abruptly, following the same
+      // gameplay/visual separation used by the referenced boilerplate.
+      const visualRoot = this.object.userData.visualRoot;
+      if (visualRoot) {
+        const visualDelta = THREE.MathUtils.euclideanModulo(
+          -this.object.rotation.y + Math.PI,
+          Math.PI * 2
+        ) - Math.PI;
+        visualRoot.rotation.y = THREE.MathUtils.damp(
+          visualRoot.rotation.y,
+          visualDelta,
+          this.visualRotationSharpness,
+          dt
+        );
+      }
     }
 
     this.state = !this.grounded
