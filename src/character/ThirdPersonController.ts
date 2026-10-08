@@ -12,7 +12,7 @@ export class ThirdPersonController{
  constructor(private readonly physics:PhysicsWorldHandle,private readonly input:Input,private readonly camera:ThirdPersonCamera,private readonly stateStore:GameState){
   this.humanoid=createHumanoid();this.object.name='Player';this.object.add(this.humanoid.root);this.humanoid.root.position.y=-1.08;this.object.position.copy(this.spawn);
   const desc=RAPIER.ColliderDesc.capsule(.78,.34).setTranslation(this.spawn.x,this.spawn.y,this.spawn.z);
-  this.collider=physics.createCollider(desc);this.characterController=physics.createCharacterController(.02);this.characterController.setMaxSlopeClimbAngle(Math.PI*.26);this.characterController.setMinSlopeSlideAngle(Math.PI*.52);this.characterController.enableSnapToGround(.35);
+  this.collider=physics.createCollider(desc);this.characterController=physics.createCharacterController(.02);
  }
  reset(){this.object.position.copy(this.spawn);this.velocity.set(0,0,0);this.collider.setTranslation({x:this.spawn.x,y:this.spawn.y,z:this.spawn.z},true);this.humanoid.resetPose();}
  update(dt:number){
@@ -27,5 +27,5 @@ export class ThirdPersonController{
   if(input.lengthSq()>.0001){const yaw=Math.atan2(this.relative.x,this.relative.z);this.humanoid.visuals.rotation.y=THREE.MathUtils.damp(this.humanoid.visuals.rotation.y,yaw,this.visualRotationSharpness,dt);}
   this.humanoid.update(dt,this.state,speed);this.humanoid.root.scale.y=THREE.MathUtils.damp(this.humanoid.root.scale.y,this.crouched?.84:1,10,dt);this.stateStore.playerState=this.state;this.stateStore.speed=speed;
  }
- dispose(){this.physics.removeCollider(this.collider);this.physics.removeCharacterController(this.characterController);}
+ dispose(){}
 }
