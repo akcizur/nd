@@ -36,6 +36,7 @@ export class PlayerController {
     this.walkSpeed = 2.6;
     this.runSpeed = 4.8;
     this.sprintSpeed = 7.0;
+    this.crouchSpeed = 1.55;
 
     // Acceleration is deliberately finite: velocity drives animation speed.
     this.acceleration = 11;
@@ -116,11 +117,13 @@ export class PlayerController {
       move.set(0, 0);
     }
 
-    const speed = this.input.sprint
-      ? this.sprintSpeed
-      : magnitude < 0.65
-        ? this.walkSpeed
-        : this.runSpeed;
+    const speed = this.input.crouch
+      ? this.crouchSpeed
+      : this.input.sprint
+        ? this.sprintSpeed
+        : magnitude < 0.65
+          ? this.walkSpeed
+          : this.runSpeed;
 
     const yaw = this.camera?.yaw ?? this.object.rotation.y;
 
@@ -271,13 +274,15 @@ export class PlayerController {
 
     this.state = !this.grounded
       ? (this.velocityY > 0 ? 'jump' : 'fall')
-      : horizontalMagnitude < 0.08
-        ? 'idle'
-        : this.input.sprint
-          ? 'sprint'
-          : horizontalMagnitude < this.runSpeed * 0.92
-            ? 'walk'
-            : 'run';
+      : this.input.crouch
+        ? 'crouch'
+        : horizontalMagnitude < 0.08
+          ? 'idle'
+          : this.input.sprint
+            ? 'sprint'
+            : horizontalMagnitude < this.runSpeed * 0.92
+              ? 'walk'
+              : 'run';
   }
 
   getPhysicsState() {
