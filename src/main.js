@@ -81,6 +81,7 @@ function addPhysicsBox({ x, y, z, width, height, depth, interaction = null }) {
     mesh.userData.interaction = interaction;
   }
 
+  testObstacles.push(mesh);
   return mesh;
 }
 
@@ -96,6 +97,7 @@ let cameraSystem = null;
 let physicsWorld = null;
 let playerPhysics = null;
 let interactionSystem = null;
+const testObstacles = [];
 
 function createPlayerRig(model, targetHeight = 1.8) {
   const rig = new THREE.Group();
@@ -477,12 +479,8 @@ async function start() {
   });
   interactionSystem.setRoot(world);
 
-  const obstacleA = world.children.find(
-    object => object.position?.x === 0 && object.position?.z === -4
-  );
-  const obstacleB = world.children.find(
-    object => object.position?.x === 2.6 && object.position?.z === -6
-  );
+  const obstacleA = testObstacles[0];
+  const obstacleB = testObstacles[1];
 
   if (obstacleA) {
     interactionSystem.register(obstacleA, {
