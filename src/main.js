@@ -13,6 +13,7 @@ import { PlayerController } from './player/PlayerController.js';
 import { CameraSystem } from './camera/CameraSystem.js';
 import { AnimationSystem } from './animation/AnimationSystem.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
+import { InteractionSystem } from './interaction/InteractionSystem.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0b0b);
@@ -60,7 +61,7 @@ world.add(grid);
 // Small physical test obstacles: they make the capsule controller's
 // wall blocking + autostep behavior immediately visible while the scene
 // is still intentionally minimal.
-function addPhysicsBox({ x, y, z, width, height, depth }) {
+function addPhysicsBox({ x, y, z, width, height, depth, interaction = null }) {
   physicsWorld?.addStaticBox(x, y, z, width, height, depth);
 
   const mesh = new THREE.Mesh(
@@ -75,6 +76,12 @@ function addPhysicsBox({ x, y, z, width, height, depth }) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   world.add(mesh);
+
+  if (interaction) {
+    mesh.userData.interaction = interaction;
+  }
+
+  return mesh;
 }
 
 const loader = new GLTFLoader();
@@ -88,6 +95,7 @@ let playerController = null;
 let cameraSystem = null;
 let physicsWorld = null;
 let playerPhysics = null;
+let interactionSystem = null;
 
 function createPlayerRig(model, targetHeight = 1.8) {
   const rig = new THREE.Group();
@@ -424,10 +432,23 @@ function updateInteraction() {
   if (input.consume('pause')) {
     gameState.set(GameState.PAUSED);
     gameMenu.open();
+    return;
   }
 
-  hudObjective.textContent = 'Third-person movement';
-  hudHint.textContent = 'WASD · SHIFT běh · RMB kamera';
+  const target = interactionSystem?.update({ maxDistance: 3 });
+  const prompt = target?.data?.prompt;
+
+  hudObjective.textContent = target
+    ? prompt || 'Interact'
+    : 'Third-person movement';
+
+  hudHint.textContent = target
+    ? 'E · interakce'
+    : 'WASD · SHIFT běh · RMB kamera';
+
+  if (target && input.consume('interact')) {
+    target.data.action?.(target);
+  }
 }
 
 const clock = new THREE.Clock();
@@ -449,6 +470,37 @@ async function start() {
 
   cameraSystem = new CameraSystem(camera);
   applyCameraSettings();
+
+  interactionSystem = new InteractionSystem({
+    camera,
+    maxDistance: 3,
+  });
+  interactionSystem.setRoot(world);
+
+  const obstacleA = world.children.find(
+    object => object.position?.x === 0 && object.position?.z === -4
+  );
+  const obstacleB = world.children.find(
+    object => object.position?.x === 2.6 && object.position?.z === -6
+  );
+
+  if (obstacleA) {
+    interactionSystem.register(obstacleA, {
+      prompt: 'Physical obstacle',
+      action: ({ object }) => {
+        console.info('[INTERACTION] obstacle A', object.name);
+      },
+    });
+  }
+
+  if (obstacleB) {
+    interactionSystem.register(obstacleB, {
+      prompt: 'Physical obstacle',
+      action: ({ object }) => {
+        console.info('[INTERACTION] obstacle B', object.name);
+      },
+    });
+  }
 
   playerController = new PlayerController({
     object: player,
