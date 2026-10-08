@@ -1,43 +1,55 @@
-import { ASSET_PACKS } from './AssetPackRegistry.js';
+const BASE = import.meta.env.BASE_URL || '/';
 
-export const ASSET_MANIFEST = Object.freeze({
-  ...ASSET_PACKS,
-  animations2: {
-    id: 'quaternius-universal-animation-library-2',
-    name: 'Quaternius Universal Animation Library 2',
-    license: 'CC0-1.0',
-    source: 'https://quaternius.itch.io/universal-animation-library-2',
-    status: 'optional',
-    gltf: null,
+export const ASSET_MANIFEST = {
+  characters: {
+    player: {
+      id: 'quaternius-superhero-male',
+      type: 'remote',
+      path: 'https://raw.githubusercontent.com/kirbycope/godot-3d-player-controller-v2/a928cfa67684352b75a65c510d8751d1f3f2489c/assets/universal_base_characters/Base%20Characters/Superhero_Male_FullBody.gltf',
+      license: 'CC0-1.0',
+    },
   },
-  vehicles: {
-    id: 'kenney-car-kit',
-    name: 'Kenney Car Kit',
-    license: 'CC0-1.0',
-    source: 'https://kenney.nl/assets/car-kit',
-    status: 'optional',
-    models: [],
-  },
-  materials: {
-    id: 'polyhaven',
-    name: 'Poly Haven',
-    license: 'CC0',
-    source: 'https://polyhaven.com/',
-    status: 'optional',
-  },
-});
 
-export const MAVON_ASSET_POLICY = Object.freeze({
-  preferredLicense: 'CC0',
-  externalAssetsMustBeDeclared: true,
-  runtimeDownloadFallback: true,
-  localAssetsDirectory: '/assets/mavon/',
-});
+  animations: {
+    locomotion: {
+      id: 'ual1-standard',
+      type: 'remote',
+      path: 'https://raw.githubusercontent.com/DyingStar-game/DyingStar/bf86a5120641676336735efad0c5a31e32775179/assets/Universal%20Animation%20Library/Unreal-Godot/UAL1_Standard.glb',
+      license: 'CC0-1.0',
+    },
+  },
 
-export function getAsset(id) {
-  return ASSET_MANIFEST[id] || null;
+  world: {
+    street: [],
+    buildings: [],
+    props: [],
+    vehicles: [],
+    nature: [],
+  },
+};
+
+export function assetUrl(entryOrPath) {
+  const path = typeof entryOrPath === 'string'
+    ? entryOrPath
+    : entryOrPath?.path;
+
+  if (!path) {
+    throw new Error('Asset manifest entry has no path');
+  }
+
+  if (/^(?:https?:)?\\//i.test(path)) {
+    return path;
+  }
+
+  return new URL(path.replace(/^\\/+/, ''), new URL(BASE, document.baseURI)).href;
 }
 
-export function listAssetsByType(type) {
-  return Object.values(ASSET_MANIFEST).filter(asset => asset.type === type);
+export function getAsset(...keys) {
+  return keys.reduce((value, key) => value?.[key], ASSET_MANIFEST);
+}
+
+export function registerAsset(category, asset) {
+  if (!ASSET_MANIFEST[category]) ASSET_MANIFEST[category] = [];
+  ASSET_MANIFEST[category].push(asset);
+  return asset;
 }
