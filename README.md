@@ -29,8 +29,10 @@ The project is currently focused on one thing: making character movement and thi
 - procedural crouch / jump / fall / landing poses
 - animation timing derived from real capsule velocity
 - zero runtime third-party character downloads
-- simple flat test ground
-- lightweight scene designed for movement testing
+- procedural city blocks with roads, sidewalks, buildings, lamps and central plazas
+- lightweight traffic and pedestrian simulation
+- simple physics-driven player vehicle with enter / exit flow
+- city stays generated from Three.js primitives for GitHub Pages
 - GitHub Pages deployment
 - Vite production build
 - dedicated AssetManifest + production asset pipeline
@@ -39,7 +41,7 @@ The project is currently focused on one thing: making character movement and thi
 
 ## Current scope
 
-The scene is intentionally minimal.
+The scene is a lightweight procedural city sandbox.
 
 ```text
 ┌──────────────────────────────────────┐
@@ -55,7 +57,7 @@ The scene is intentionally minimal.
 └──────────────────────────────────────┘
 ```
 
-There are currently no city, vehicle, NPC, mission or inventory systems in the active movement prototype.
+The current playable loop is intentionally small: walk, sprint, crouch, jump, explore a procedural city, enter a car, drive, exit, and observe traffic/pedestrians.
 
 The goal is to establish a solid character-controller foundation first.
 
@@ -152,6 +154,16 @@ idle → walk → run → sprint
 The visual character is separated from the Rapier capsule, so changing the mesh does not change gameplay collision. No external character file is required to start the game.
 
 
+## City / vehicle foundation
+
+The city layer follows the useful parts of open Three.js browser-game patterns without copying an external repository into the project:
+
+- `CityBuilder` generates roads, sidewalks, buildings, lamps and plazas.
+- `CitySimulation` drives lightweight traffic and pedestrians.
+- `SimpleCar` provides a local visual vehicle mesh.
+- `VehicleController` + Rapier provide the physics-driven driving loop.
+- All four systems are plain JavaScript/Three.js and remain compatible with Vite static deployment.
+
 ## Project architecture
 
 ```text
@@ -162,7 +174,9 @@ src/
 ├── core/            Game state, input facade and debug
 ├── input/           Keyboard, mouse, gamepad and touch input
 ├── mobile/          Virtual joystick and touch controls
-├── player/          Character movement controller
+├── player/          Character movement controller + procedural model
+├── vehicle/         Vehicle mesh and physics controller
+├── world/           Procedural city + traffic / pedestrian simulation
 ├── ui/              Menus and HUD
 └── main.js          Scene bootstrap and game loop
 ```
