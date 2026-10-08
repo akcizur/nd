@@ -27,5 +27,5 @@ export class ThirdPersonController{
   if(input.lengthSq()>.0001){const yaw=Math.atan2(this.relative.x,this.relative.z);this.humanoid.visuals.rotation.y=THREE.MathUtils.damp(this.humanoid.visuals.rotation.y,yaw,this.visualRotationSharpness,dt);}
   this.humanoid.update(dt,this.state,speed);this.humanoid.root.scale.y=THREE.MathUtils.damp(this.humanoid.root.scale.y,this.crouched?.84:1,10,dt);this.stateStore.playerState=this.state;this.stateStore.speed=speed;
  }
- dispose(){this.physics.removeCollider(this.collider,true);this.physics.removeCharacterController(this.characterController);}
+ dispose(){this.physics.removeCollider(this.collider);this.physics.removeCharacterController(this.characterController);}
 }
