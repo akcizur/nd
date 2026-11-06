@@ -11,6 +11,7 @@ export class Input{
    document.addEventListener('mousemove',e=>{if(this.pointerLocked){this.mouseLook.x+=e.movementX;this.mouseLook.y+=e.movementY;}});
    this.stick(moveEl,moveKnob,'move'); this.stick(lookEl,lookKnob,'look');
    document.querySelector('[data-touch="jump"]')?.addEventListener('pointerdown',()=>{this.jumpQueued=true});
+   const crouch=document.querySelector<HTMLElement>('[data-touch="crouch"]');crouch?.addEventListener('pointerdown',()=>{this.crouch=true});crouch?.addEventListener('pointerup',()=>{this.crouch=false});crouch?.addEventListener('pointercancel',()=>{this.crouch=false});crouch?.addEventListener('pointerleave',()=>{this.crouch=false});
    const run=document.querySelector('[data-touch="run"]'); run?.addEventListener('pointerdown',()=>{this.touchRun=true}); run?.addEventListener('pointerup',()=>{this.touchRun=false}); run?.addEventListener('pointercancel',()=>{this.touchRun=false});
    document.querySelector('[data-action="reset"]')?.addEventListener('click',()=>{this.resetQueued=true}); document.querySelector('[data-action="resume"]')?.addEventListener('click',()=>{this.menuQueued=true});
  }
