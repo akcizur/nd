@@ -25,7 +25,7 @@ export class ThirdPersonController{
   const translation={x:this.velocity.x*dt,y:this.velocity.y*dt,z:this.velocity.z*dt};this.characterController.computeColliderMovement(this.collider,translation);const corrected=this.characterController.computedMovement(),current=this.collider.translation(),next={x:current.x+corrected.x,y:current.y+corrected.y,z:current.z+corrected.z};
   this.collider.setTranslation(next);this.object.position.set(next.x,next.y,next.z);this.grounded=this.characterController.computedGrounded();if(this.grounded&&this.velocity.y<0)this.velocity.y=0;
   const speed=Math.hypot(this.velocity.x,this.velocity.z);if(!this.grounded)this.state=this.velocity.y>0?'JUMP':'FALL';else if(speed<.15)this.state='IDLE';else if(this.input.run)this.state='RUN';else this.state='WALK';
-  if(input.lengthSq()>.0001){const yaw=Math.atan2(this.relative.x,this.relative.z);this.humanoid.visuals.rotation.y=THREE.MathUtils.damp(this.humanoid.visuals.rotation.y,yaw,this.visualRotationSharpness,dt);}
+  if(input.lengthSq()>.0001){const yaw=Math.atan2(-this.relative.x,-this.relative.z);this.humanoid.visuals.rotation.y=THREE.MathUtils.damp(this.humanoid.visuals.rotation.y,yaw,this.visualRotationSharpness,dt);}
   this.humanoid.update(dt,this.state,speed);this.humanoid.root.scale.y=THREE.MathUtils.damp(this.humanoid.root.scale.y,this.crouched?.78:1,10,dt);this.stateStore.playerState=this.state;this.stateStore.speed=speed;
  }
  dispose(){}
