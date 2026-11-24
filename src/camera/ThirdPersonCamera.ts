@@ -25,7 +25,7 @@ export class ThirdPersonCamera {
   lookDelta(dx: number, dy: number, dt = 1 / 60, source: 'mouse' | 'touch' = 'mouse') {
     const scale = source === 'mouse' ? this.sensitivity : this.touchTurnSpeed * dt;
     // Positive horizontal input must orbit to the right, not invert the mouse.
-    this.yaw += dx * scale;
+    this.yaw -= dx * scale;
     this.pitch -= dy * scale;
     this.pitch = THREE.MathUtils.clamp(this.pitch, this.minPitch, this.maxPitch);
   }
