@@ -1,12 +1,14 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/><meta name="theme-color" content="#0b0e13"/><meta name="description" content="ND third-person web boilerplate"/><title>ND — Third Person</title></head>
+<html lang="cs"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/><meta name="theme-color" content="#0b0e13"/><meta name="description" content="ND third-person web boilerplate"/><title>ND — Third Person</title></head>
 <body>
 <div id="app"></div><div id="ui-root"></div>
 <div id="hud-dom">
   <div id="crosshair"></div>
   <div id="status-panel"><div class="eyebrow">ND / MOVEMENT LAB</div><div class="row"><span>STATE</span><b id="state-value">IDLE</b></div><div class="row"><span>SPEED</span><b id="speed-value">0.0 m/s</b></div><div class="row"><span>FPS</span><b id="fps-value">60</b></div></div>
   <div id="hint-panel">WASD · Shift run · Space jump · C crouch · click/mouse camera · wheel zoom</div>
-  <div id="menu-panel" hidden><div class="menu-card"><div class="eyebrow">ND / MENU</div><h1>Third Person Playground</h1><p>Separated gameplay capsule + visual model, smooth visual rotation and clamped orbit camera.</p><div class="menu-actions"><button data-action="resume">RESUME</button><button data-action="reset">RESET</button></div></div></div>
+  <div id="menu-panel" hidden><div class="menu-card" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+    <button class="menu-close" type="button" data-action="close-menu" aria-label="Zavřít nabídku">×</button>
+    <div class="eyebrow">ND / MENU</div><h1 id="menu-title">Third Person Playground</h1><p>Separated gameplay capsule + visual model, smooth visual rotation and clamped orbit camera.</p><div class="menu-actions"><button data-action="resume">POKRAČOVAT</button><button data-action="reset">RESET</button></div></div></div>
   <div id="touch-controls">
     <div class="stick" data-stick="move"><div class="stick-knob"></div></div><div class="stick" data-stick="look"><div class="stick-knob"></div></div>
     <button class="touch-button" data-touch="run">RUN</button><button class="touch-button jump" data-touch="jump">JUMP</button><button class="touch-button crouch" data-touch="crouch">CROUCH</button>
